@@ -40,6 +40,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# datasets (generated data)
+/datasets
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
