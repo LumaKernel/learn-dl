@@ -2,14 +2,14 @@ import { Data } from "effect";
 import type { Vector } from "../math/vector";
 import * as V from "../math/vector";
 
-/** Loss function: computes scalar loss and gradient w.r.t. predicted */
+/** 損失関数 (loss function): スカラー損失 (scalar loss) と予測値に対する勾配 (gradient) を計算する */
 export class LossFunction extends Data.TaggedClass("LossFunction")<{
   readonly name: string;
   readonly loss: (predicted: Vector, target: Vector) => number;
   readonly gradient: (predicted: Vector, target: Vector) => Vector;
 }> {}
 
-/** Mean Squared Error */
+/** 平均二乗誤差 (Mean Squared Error) */
 export const mse: LossFunction = new LossFunction({
   name: "mse",
   loss: (predicted, target) => {
@@ -21,8 +21,8 @@ export const mse: LossFunction = new LossFunction({
 });
 
 /**
- * Cross-entropy loss (for use with softmax output).
- * target is one-hot encoded.
+ * 交差エントロピー損失 (cross-entropy loss)。ソフトマックス (softmax) 出力との組み合わせで使用する。
+ * target はワンホット (one-hot) エンコーディングを前提とする。
  */
 export const crossEntropy: LossFunction = new LossFunction({
   name: "crossEntropy",

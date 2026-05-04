@@ -2,7 +2,7 @@ import { Data } from "effect";
 import { Vector } from "./vector";
 import * as V from "./vector";
 
-/** Row-major matrix: rows x cols */
+/** 行優先 (row-major) 行列 (matrix): rows x cols */
 export class Matrix extends Data.TaggedClass("Matrix")<{
   readonly rows: number;
   readonly cols: number;
@@ -43,11 +43,11 @@ export const fromArrays = (data: ReadonlyArray<ReadonlyArray<number>>): Matrix =
 export const transpose = (m: Matrix): Matrix =>
   fromRows(Array.from({ length: m.cols }, (_, j) => m.col(j)));
 
-/** Matrix-vector multiply: (rows x cols) * (cols,) -> (rows,) */
+/** 行列ベクトル積 (matrix-vector multiply): (rows x cols) * (cols,) -> (rows,) */
 export const mulVec = (m: Matrix, v: Vector): Vector =>
   V.from(m.data.map((r) => V.dot(r, v)));
 
-/** Matrix-matrix multiply */
+/** 行列積 (matrix-matrix multiply) */
 export const mul = (a: Matrix, b: Matrix): Matrix => {
   const bt = transpose(b);
   return fromRows(
@@ -67,6 +67,6 @@ export const scale = (m: Matrix, s: number): Matrix =>
 export const map = (m: Matrix, f: (x: number, i: number, j: number) => number): Matrix =>
   fromRows(m.data.map((r, i) => V.from(r.data.map((x, j) => f(x, i, j)))));
 
-/** Outer product: (n,) x (m,) -> (n x m) */
+/** 外積 (outer product): (n,) x (m,) -> (n x m) */
 export const outer = (a: Vector, b: Vector): Matrix =>
   fromRows(a.data.map((ai) => V.from(b.data.map((bj) => ai * bj))));

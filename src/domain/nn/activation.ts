@@ -2,7 +2,7 @@ import { Data } from "effect";
 import { Vector } from "../math/vector";
 import * as V from "../math/vector";
 
-/** Activation function definition: forward and its derivative */
+/** 活性化関数 (activation function) の定義: 順伝播 (forward) とその導関数 (derivative) */
 export class Activation extends Data.TaggedClass("Activation")<{
   readonly name: string;
   readonly forward: (input: Vector) => Vector;
@@ -37,9 +37,9 @@ export const identity: Activation = new Activation({
 });
 
 /**
- * Softmax: applied to entire vector.
- * Backward returns 1s because softmax gradient is handled
- * together with cross-entropy loss in the training step.
+ * ソフトマックス (softmax): ベクトル (vector) 全体に適用する。
+ * ソフトマックスの勾配 (gradient) は交差エントロピー損失 (cross-entropy loss) と
+ * まとめて学習ステップで処理するため、逆伝播 (backward) では 1 を返す。
  */
 export const softmax: Activation = new Activation({
   name: "softmax",

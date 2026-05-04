@@ -5,7 +5,7 @@ import { LayerCache } from "./layer";
 import type { LayerParams, LayerDef } from "./layer";
 import type { NetworkState } from "./network";
 
-/** Forward pass through a single layer */
+/** 単一レイヤーの順伝播 (forward pass) */
 export const forwardLayer = (
   def: LayerDef,
   params: LayerParams,
@@ -16,7 +16,7 @@ export const forwardLayer = (
   return new LayerCache({ input, preActivation, output });
 };
 
-/** Forward pass through entire network, returns all layer caches */
+/** ネットワーク全体の順伝播 (forward pass)。全レイヤーのキャッシュ (cache) を返す */
 export const forwardNetwork = (
   network: NetworkState,
 ): ((input: Vector) => ReadonlyArray<LayerCache>) =>
@@ -36,7 +36,7 @@ export const forwardNetwork = (
     return caches;
   };
 
-/** Get final output from forward pass */
+/** 順伝播 (forward pass) の最終出力を取得する */
 export const predict = (
   network: NetworkState,
   input: Vector,

@@ -15,13 +15,13 @@ export class InitStrategy extends Data.TaggedClass("InitStrategy")<{
 
 export const xavier: InitStrategy = new InitStrategy({
   name: "xavier",
-  description: "Xavier/Glorot: good for sigmoid/tanh",
+  description: "Xavier/Glorot: sigmoid/tanh に適した初期化 (initialization)",
   getStd: Rand.xavierStd,
 });
 
 export const he: InitStrategy = new InitStrategy({
   name: "he",
-  description: "He: good for ReLU",
+  description: "He: ReLU に適した初期化 (initialization)",
   getStd: (fanIn) => Rand.heStd(fanIn),
 });
 

@@ -4,7 +4,7 @@ import * as V from "./vector";
 import { Matrix } from "./matrix";
 import * as Mat from "./matrix";
 
-/** Seedable PRNG state (xoshiro128**) */
+/** シード (seed) 指定可能な擬似乱数生成器 (PRNG) の状態 (xoshiro128**) */
 export class Rng extends Data.TaggedClass("Rng")<{
   readonly state: readonly [number, number, number, number];
 }> {}
