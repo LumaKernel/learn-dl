@@ -1,74 +1,80 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { Vector } from "../math/vector";
-import type { Matrix } from "../math/matrix";
-import type { LayerCache, LayerDef, LayerGradients, LayerParams } from "./layer";
-import type { NetworkState } from "./network";
-import type { LossFunction } from "./loss";
-
-// ============================================================
-// TODO: ここを自分で実装する
-// ============================================================
+import * as V from "../math/vector";
+import * as Mat from "../math/matrix";
+import { LayerGradients } from "./layer";
+import type { LayerCache, LayerDef, LayerParams } from "./layer";
+import { LayerParams as LayerParamsClass } from "./layer";
+import { NetworkState } from "./network";
 
 /**
- * 単一レイヤーの逆伝播を実装してください。
+ * 単一レイヤーの逆伝播。
  *
- * @param def - レイヤーの定義（activation関数を含む）
- * @param params - レイヤーの重みとバイアス
- * @param cache - forward passで保存した中間値（input, preActivation, output）
- * @param dOutput - このレイヤーの出力に対する損失の勾配
- * @returns [レイヤーの勾配, 入力に対する勾配（前のレイヤーへ伝播する）]
- *
- * ヒント:
- * 1. activation の backward で dOutput から preActivation の勾配を得る
- * 2. dWeights = outer(dPreActivation, cache.input)
+ * 1. activation の backward で dOutput → dPreActivation
+ * 2. dWeights = outer(dPreActivation, input)
  * 3. dBias = dPreActivation
- * 4. dInput = transpose(weights) * dPreActivation
+ * 4. dInput = W^T * dPreActivation
  */
-export const backwardLayer: (
+export const backwardLayer = (
   def: LayerDef,
   params: LayerParams,
   cache: LayerCache,
   dOutput: Vector,
-) => readonly [LayerGradients, Vector] = (_def, _params, _cache, _dOutput) => {
-  throw new Error("TODO: backwardLayer を実装してください");
+): readonly [LayerGradients, Vector] => {
+  const dActivation = def.activation.backward(cache.preActivation, cache.output);
+  const dPreActivation = V.hadamard(dOutput, dActivation);
+
+  const dWeights = Mat.outer(dPreActivation, cache.input);
+  const dBias = dPreActivation;
+  const dInput = Mat.mulVec(Mat.transpose(params.weights), dPreActivation);
+
+  return [new LayerGradients({ dWeights, dBias }), dInput];
 };
 
 /**
- * ネットワーク全体の逆伝播を実装してください。
- *
- * @param network - ネットワークの状態（定義と重み）
- * @param caches - forward passの各レイヤーのキャッシュ
- * @param lossGradient - 最終出力に対する損失関数の勾配
- * @returns 各レイヤーの勾配の配列
- *
- * ヒント:
- * - 最後のレイヤーから最初のレイヤーへ逆順にbackwardLayerを呼ぶ
- * - 各レイヤーから返されるdInputを次の（前の）レイヤーのdOutputとして渡す
+ * ネットワーク全体の逆伝播。
+ * 最終層から入力層へ逆順に勾配を伝播する。
  */
-export const backwardNetwork: (
+export const backwardNetwork = (
   network: NetworkState,
   caches: ReadonlyArray<LayerCache>,
   lossGradient: Vector,
-) => ReadonlyArray<LayerGradients> = (_network, _caches, _lossGradient) => {
-  throw new Error("TODO: backwardNetwork を実装してください");
+): ReadonlyArray<LayerGradients> => {
+  const gradients: LayerGradients[] = Array.from(
+    { length: caches.length },
+    () => new LayerGradients({ dWeights: Mat.zeros(0, 0), dBias: V.zeros(0) }),
+  );
+  let dOutput = lossGradient;
+
+  for (let i = caches.length - 1; i >= 0; i--) {
+    const layerDef = network.def.layers[i];
+    const layerParams = network.params[i];
+    const cache = caches[i];
+    if (!layerDef || !layerParams || !cache) continue;
+
+    const [grad, dInput] = backwardLayer(layerDef, layerParams, cache, dOutput);
+    gradients[i] = grad;
+    dOutput = dInput;
+  }
+
+  return gradients;
 };
 
 /**
- * 勾配を使ってパラメータを更新してください。
- *
- * @param network - 現在のネットワーク状態
- * @param gradients - 各レイヤーの勾配
- * @param learningRate - 学習率
- * @returns 更新されたネットワーク状態
- *
- * ヒント:
- * - weights_new = weights_old - learningRate * dWeights
- * - bias_new = bias_old - learningRate * dBias
+ * 勾配降下法でパラメータを更新する。
+ * w_new = w_old - lr * dw
  */
-export const applyGradients: (
+export const applyGradients = (
   network: NetworkState,
   gradients: ReadonlyArray<LayerGradients>,
   learningRate: number,
-) => NetworkState = (_network, _gradients, _learningRate) => {
-  throw new Error("TODO: applyGradients を実装してください");
+): NetworkState => {
+  const newParams = network.params.map((p, i) => {
+    const grad = gradients[i];
+    if (!grad) return p;
+    return new LayerParamsClass({
+      weights: Mat.sub(p.weights, Mat.scale(grad.dWeights, learningRate)),
+      bias: V.sub(p.bias, V.scale(grad.dBias, learningRate)),
+    });
+  });
+  return new NetworkState({ def: network.def, params: newParams });
 };
