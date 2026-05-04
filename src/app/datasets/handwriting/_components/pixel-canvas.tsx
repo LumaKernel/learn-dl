@@ -37,6 +37,7 @@ type PixelCanvasProps = {
   readonly size: GridSize;
   readonly pixels: ReadonlyArray<PixelValue>;
   readonly onPixelsChange: (pixels: ReadonlyArray<PixelValue>) => void;
+  readonly onStrokeStart?: () => void;
   readonly canvasSize?: number;
 };
 
@@ -44,6 +45,7 @@ export function PixelCanvas({
   size,
   pixels,
   onPixelsChange,
+  onStrokeStart,
   canvasSize = 400,
 }: PixelCanvasProps) {
   const [isDrawing, setIsDrawing] = useState(false);
@@ -87,11 +89,12 @@ export function PixelCanvas({
     (e: React.MouseEvent<SVGSVGElement>) => {
       const coord = getGridCoords(e);
       if (!coord) return;
+      onStrokeStart?.();
       setIsDrawing(true);
       lastCoordRef.current = coord;
       paintPoints([coord]);
     },
-    [getGridCoords, paintPoints],
+    [getGridCoords, paintPoints, onStrokeStart],
   );
 
   const handlePointerMove = useCallback(
@@ -117,11 +120,12 @@ export function PixelCanvas({
       e.preventDefault();
       const coord = getGridCoords(e);
       if (!coord) return;
+      onStrokeStart?.();
       setIsDrawing(true);
       lastCoordRef.current = coord;
       paintPoints([coord]);
     },
-    [getGridCoords, paintPoints],
+    [getGridCoords, paintPoints, onStrokeStart],
   );
 
   const handleTouchMove = useCallback(

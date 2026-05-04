@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Digit } from "@/domain/dataset";
 import type { GridSize, PixelValue } from "@/domain/pixel-grid";
@@ -55,6 +55,26 @@ export function HandwritingEditor() {
   >(() => Array.from({ length: size * size }, () => 0 as const));
   const [isNewEntry, setIsNewEntry] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const undoStackRef = useRef<ReadonlyArray<ReadonlyArray<PixelValue>>>([]);
+  const currentPixelsRef = useRef(currentPixels);
+  useEffect(() => {
+    currentPixelsRef.current = currentPixels;
+  }, [currentPixels]);
+
+  const pushUndo = useCallback(() => {
+    undoStackRef.current = [...undoStackRef.current, currentPixelsRef.current];
+    if (undoStackRef.current.length > 50) {
+      undoStackRef.current = undoStackRef.current.slice(-50);
+    }
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+    const prev = stack[stack.length - 1];
+    undoStackRef.current = stack.slice(0, -1);
+    if (prev) setCurrentPixels(prev);
+  }, []);
 
   const updateUrl = useCallback(
     (s: GridSize, f: string, d: Digit) => {
@@ -103,6 +123,7 @@ export function HandwritingEditor() {
       setSelectedEntryId(null);
       setIsNewEntry(true);
       setCurrentPixels(Array.from({ length: s * s }, () => 0 as const));
+      undoStackRef.current = [];
     },
     [updateUrl],
   );
@@ -113,6 +134,7 @@ export function HandwritingEditor() {
       setCurrentPixels(Array.from({ length: size * size }, () => 0 as const));
       setIsNewEntry(true);
       setSelectedEntryId(null);
+      undoStackRef.current = [];
       refreshEntries();
       refreshFolders();
     });
@@ -152,6 +174,7 @@ export function HandwritingEditor() {
       setSelectedEntryId(entry.meta.id);
       setCurrentPixels(entry.pixels);
       setIsNewEntry(false);
+      undoStackRef.current = [];
     },
     [],
   );
@@ -160,19 +183,27 @@ export function HandwritingEditor() {
     setSelectedEntryId(null);
     setIsNewEntry(true);
     setCurrentPixels(Array.from({ length: size * size }, () => 0 as const));
+    undoStackRef.current = [];
   }, [size]);
 
-  // Space key to save and start new
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Space: save and start new
       if (e.code === "Space" && e.target === document.body) {
         e.preventDefault();
         handleSave();
+        return;
+      }
+      // Cmd/Ctrl+Z: undo
+      if (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave]);
+  }, [handleSave, handleUndo]);
 
   return (
     <div className="flex h-full">
@@ -293,6 +324,7 @@ export function HandwritingEditor() {
             size={size}
             pixels={currentPixels}
             onPixelsChange={setCurrentPixels}
+            onStrokeStart={pushUndo}
           />
           <div className="flex flex-col items-center gap-1">
             <span className="text-xs text-zinc-400">Preview</span>
