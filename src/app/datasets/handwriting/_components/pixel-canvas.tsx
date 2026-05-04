@@ -3,6 +3,36 @@
 import { useCallback, useRef, useState } from "react";
 import type { GridSize, PixelValue } from "@/domain/pixel-grid";
 
+type Coord = { readonly x: number; readonly y: number };
+
+const bresenhamLine = (from: Coord, to: Coord): ReadonlyArray<Coord> => {
+  const points: Coord[] = [];
+  let x0 = from.x;
+  let y0 = from.y;
+  const x1 = to.x;
+  const y1 = to.y;
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+
+  for (;;) {
+    points.push({ x: x0, y: y0 });
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+  return points;
+};
+
 type PixelCanvasProps = {
   readonly size: GridSize;
   readonly pixels: ReadonlyArray<PixelValue>;
@@ -19,10 +49,11 @@ export function PixelCanvas({
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawColor, setDrawColor] = useState<PixelValue>(1);
   const svgRef = useRef<SVGSVGElement>(null);
+  const lastCoordRef = useRef<Coord | null>(null);
   const pixelSize = canvasSize / size;
 
   const getGridCoords = useCallback(
-    (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
+    (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>): Coord | null => {
       const svg = svgRef.current;
       if (!svg) return null;
       const rect = svg.getBoundingClientRect();
@@ -36,63 +67,82 @@ export function PixelCanvas({
     [size],
   );
 
-  const paint = useCallback(
-    (
-      e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>,
-    ) => {
-      const coords = getGridCoords(e);
-      if (!coords) return;
-      const idx = coords.y * size + coords.x;
-      if (pixels[idx] === drawColor) return;
+  const paintPoints = useCallback(
+    (points: ReadonlyArray<Coord>) => {
       const next = [...pixels];
-      next[idx] = drawColor;
-      onPixelsChange(next);
+      let changed = false;
+      for (const p of points) {
+        const idx = p.y * size + p.x;
+        if (next[idx] !== drawColor) {
+          next[idx] = drawColor;
+          changed = true;
+        }
+      }
+      if (changed) onPixelsChange(next);
     },
-    [getGridCoords, size, pixels, drawColor, onPixelsChange],
+    [size, pixels, drawColor, onPixelsChange],
   );
 
   const handlePointerDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
+      const coord = getGridCoords(e);
+      if (!coord) return;
       setIsDrawing(true);
-      paint(e);
+      lastCoordRef.current = coord;
+      paintPoints([coord]);
     },
-    [paint],
+    [getGridCoords, paintPoints],
   );
 
   const handlePointerMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (!isDrawing) return;
-      paint(e);
+      const coord = getGridCoords(e);
+      if (!coord) return;
+      const last = lastCoordRef.current;
+      const points = last ? bresenhamLine(last, coord) : [coord];
+      lastCoordRef.current = coord;
+      paintPoints(points);
     },
-    [isDrawing, paint],
+    [isDrawing, getGridCoords, paintPoints],
   );
 
   const handlePointerUp = useCallback(() => {
     setIsDrawing(false);
+    lastCoordRef.current = null;
   }, []);
 
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
       e.preventDefault();
+      const coord = getGridCoords(e);
+      if (!coord) return;
       setIsDrawing(true);
-      paint(e);
+      lastCoordRef.current = coord;
+      paintPoints([coord]);
     },
-    [paint],
+    [getGridCoords, paintPoints],
   );
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
       e.preventDefault();
       if (!isDrawing) return;
-      paint(e);
+      const coord = getGridCoords(e);
+      if (!coord) return;
+      const last = lastCoordRef.current;
+      const points = last ? bresenhamLine(last, coord) : [coord];
+      lastCoordRef.current = coord;
+      paintPoints(points);
     },
-    [isDrawing, paint],
+    [isDrawing, getGridCoords, paintPoints],
   );
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
       e.preventDefault();
       setIsDrawing(false);
+      lastCoordRef.current = null;
     },
     [],
   );
