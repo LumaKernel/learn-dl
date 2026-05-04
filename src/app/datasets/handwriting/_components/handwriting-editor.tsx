@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Digit } from "@/domain/dataset";
 import type { GridSize, PixelValue } from "@/domain/pixel-grid";
 import { PixelCanvas } from "./pixel-canvas";
@@ -23,10 +24,27 @@ type LoadedEntry = {
   readonly pixels: ReadonlyArray<PixelValue>;
 };
 
+const parseSize = (v: string | null): GridSize => {
+  if (v === "64") return 64;
+  return 28;
+};
+
+const parseDigit = (v: string | null): Digit => {
+  const n = Number(v);
+  if (n >= 0 && n <= 9 && Number.isInteger(n)) return n as Digit;
+  return 0;
+};
+
+const parseFolder = (v: string | null): string => v || "default";
+
 export function HandwritingEditor() {
-  const [size, setSize] = useState<GridSize>(28);
-  const [folder, setFolder] = useState("default");
-  const [digit, setDigit] = useState<Digit>(0);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const size = parseSize(searchParams.get("size"));
+  const folder = parseFolder(searchParams.get("folder"));
+  const digit = parseDigit(searchParams.get("digit"));
+
   const [folders, setFolders] = useState<ReadonlyArray<FolderSummary>>([]);
   const [loadedEntries, setLoadedEntries] = useState<
     ReadonlyArray<LoadedEntry>
@@ -34,9 +52,20 @@ export function HandwritingEditor() {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [currentPixels, setCurrentPixels] = useState<
     ReadonlyArray<PixelValue>
-  >(() => Array.from({ length: 28 * 28 }, () => 0 as const));
+  >(() => Array.from({ length: size * size }, () => 0 as const));
   const [isNewEntry, setIsNewEntry] = useState(true);
   const [isPending, startTransition] = useTransition();
+
+  const updateUrl = useCallback(
+    (s: GridSize, f: string, d: Digit) => {
+      const params = new URLSearchParams();
+      params.set("size", String(s));
+      params.set("folder", f);
+      params.set("digit", String(d));
+      router.replace(`?${params.toString() satisfies string}`);
+    },
+    [router],
+  );
 
   const refreshFolders = useCallback(() => {
     startTransition(async () => {
@@ -70,14 +99,12 @@ export function HandwritingEditor() {
 
   const handleSelectFolder = useCallback(
     (s: GridSize, f: string, d: Digit) => {
-      setSize(s);
-      setFolder(f);
-      setDigit(d);
+      updateUrl(s, f, d);
       setSelectedEntryId(null);
       setIsNewEntry(true);
       setCurrentPixels(Array.from({ length: s * s }, () => 0 as const));
     },
-    [],
+    [updateUrl],
   );
 
   const handleSave = useCallback(() => {

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { HandwritingEditor } from "./_components/handwriting-editor";
 
 export default function HandwritingDatasetPage() {
@@ -7,7 +8,9 @@ export default function HandwritingDatasetPage() {
         <h1 className="text-lg font-bold">Handwriting Dataset Builder</h1>
       </header>
       <main className="flex-1 overflow-hidden">
-        <HandwritingEditor />
+        <Suspense>
+          <HandwritingEditor />
+        </Suspense>
       </main>
     </div>
   );
