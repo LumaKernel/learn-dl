@@ -186,16 +186,16 @@ export function HandwritingEditor() {
     undoStackRef.current = [];
   }, [size]);
 
-  // Keyboard shortcuts
+  // キーボードショートカット
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Space: save and start new
+      // Space: 保存して次へ
       if (e.code === "Space" && e.target === document.body) {
         e.preventDefault();
         handleSave();
         return;
       }
-      // Cmd/Ctrl+Z: undo
+      // Cmd/Ctrl+Z: 元に戻す (undo)
       if (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
@@ -207,9 +207,9 @@ export function HandwritingEditor() {
 
   return (
     <div className="flex h-full">
-      {/* Left sidebar */}
+      {/* 左サイドバー */}
       <div className="w-64 border-r border-zinc-200 dark:border-zinc-700 p-3 overflow-y-auto flex flex-col gap-4">
-        <h2 className="font-bold text-lg">Dataset Explorer</h2>
+        <h2 className="font-bold text-lg">データセット一覧</h2>
         <FolderTree
           folders={folders}
           selectedSize={size}
@@ -223,14 +223,14 @@ export function HandwritingEditor() {
         <div className="flex flex-col gap-1">
           <div className="font-medium text-sm text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
             <span>
-              Digit {String(digit)} entries ({String(loadedEntries.length)})
+              数字 {String(digit)} のデータ ({String(loadedEntries.length)}件)
             </span>
             <button
               type="button"
               className="text-xs px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
               onClick={handleNewEntry}
             >
-              + New
+              + 新規
             </button>
           </div>
           <div className="flex flex-wrap gap-1 mt-1">
@@ -251,7 +251,7 @@ export function HandwritingEditor() {
                       e.stopPropagation();
                       handleDelete(entry.meta);
                     }}
-                    title="Delete"
+                    title="削除"
                   >
                     x
                   </button>
@@ -262,7 +262,7 @@ export function HandwritingEditor() {
                       e.stopPropagation();
                       handleDuplicate(entry.meta);
                     }}
-                    title="Duplicate"
+                    title="複製"
                   >
                     d
                   </button>
@@ -273,11 +273,11 @@ export function HandwritingEditor() {
         </div>
       </div>
 
-      {/* Main area */}
+      {/* メインエリア */}
       <div className="flex-1 p-6 flex flex-col items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-500">Size:</span>
+            <span className="text-sm text-zinc-500">サイズ:</span>
             {([28, 64] as const).map((s) => (
               <button
                 key={s}
@@ -294,7 +294,7 @@ export function HandwritingEditor() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-sm text-zinc-500">Digit:</span>
+            <span className="text-sm text-zinc-500">数字:</span>
             {([0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((d) => (
               <button
                 key={d}
@@ -313,9 +313,9 @@ export function HandwritingEditor() {
         </div>
 
         <div className="text-sm text-zinc-500">
-          {isNewEntry ? "New entry" : `Editing: ${(selectedEntryId ?? "") satisfies string}`}
+          {isNewEntry ? "新規エントリ" : `編集中: ${(selectedEntryId ?? "") satisfies string}`}
           {isPending && (
-            <span className="ml-2 text-blue-500">Saving...</span>
+            <span className="ml-2 text-blue-500">保存中...</span>
           )}
         </div>
 
@@ -327,7 +327,7 @@ export function HandwritingEditor() {
             onStrokeStart={pushUndo}
           />
           <div className="flex flex-col items-center gap-1">
-            <span className="text-xs text-zinc-400">Preview</span>
+            <span className="text-xs text-zinc-400">プレビュー</span>
             <MiniPreview size={size} pixels={currentPixels} previewSize={size} />
             <MiniPreview size={size} pixels={currentPixels} previewSize={48} />
           </div>
@@ -339,10 +339,10 @@ export function HandwritingEditor() {
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             onClick={handleSave}
           >
-            Save & New
+            保存して次へ
           </button>
           <span className="text-xs text-zinc-400 self-center">
-            or press Space
+            Space キーでも保存
           </span>
         </div>
       </div>

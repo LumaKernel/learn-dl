@@ -3,9 +3,15 @@ import Link from "next/link";
 const navItems = [
   {
     href: "/datasets/handwriting",
-    title: "Handwriting Dataset Builder",
-    description: "Draw and collect handwritten digit data for training",
+    title: "手書きデータセット作成",
+    description: "手書き数字を描いて学習用データセットを収集する",
     local: true,
+  },
+  {
+    href: "/models",
+    title: "モデル一覧・学習",
+    description: "ニューラルネットワークの作成、学習、リアルタイム可視化",
+    local: false,
   },
 ] as const;
 
@@ -13,14 +19,14 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1 min-h-screen">
       <header className="border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
-        <h1 className="text-2xl font-bold">Learn Deep Learning</h1>
+        <h1 className="text-2xl font-bold">深層学習 (Deep Learning) を学ぶ</h1>
         <p className="text-sm text-zinc-500 mt-1">
-          Hands-on deep learning from scratch
+          ゼロから手を動かして深層学習を理解する
         </p>
       </header>
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
         <section>
-          <h2 className="text-lg font-semibold mb-4">Tools</h2>
+          <h2 className="text-lg font-semibold mb-4">ツール</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {navItems.map((item) => (
               <Link
@@ -34,7 +40,7 @@ export default function Home() {
                 </div>
                 {item.local && (
                   <span className="inline-block mt-2 text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded">
-                    Local only
+                    ローカル専用
                   </span>
                 )}
               </Link>

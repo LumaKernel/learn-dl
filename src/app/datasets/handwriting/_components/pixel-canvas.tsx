@@ -154,27 +154,27 @@ export function PixelCanvas({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-2 items-center">
-        <span className="text-sm text-zinc-500">Draw color:</span>
+        <span className="text-sm text-zinc-500">描画色:</span>
         <button
           type="button"
           className={`w-8 h-8 border-2 rounded ${(drawColor === 1 ? "border-blue-500" : "border-zinc-300") satisfies string}`}
           style={{ backgroundColor: "#000" }}
           onClick={() => setDrawColor(1)}
-          aria-label="Black"
+          aria-label="黒"
         />
         <button
           type="button"
           className={`w-8 h-8 border-2 rounded ${(drawColor === 0 ? "border-blue-500" : "border-zinc-300") satisfies string}`}
           style={{ backgroundColor: "#fff" }}
           onClick={() => setDrawColor(0)}
-          aria-label="White (eraser)"
+          aria-label="白 (消しゴム)"
         />
         <button
           type="button"
           className="ml-4 px-3 py-1 text-sm bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
           onClick={() => onPixelsChange(Array.from({ length: size * size }, () => 0 as const))}
         >
-          Clear
+          クリア
         </button>
       </div>
       <svg

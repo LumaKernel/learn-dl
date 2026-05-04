@@ -35,7 +35,7 @@ export function FolderTree({
               {String(size)}x{String(size)}
             </div>
             {sizeFolders.length === 0 && (
-              <div className="text-zinc-400 pl-3 text-xs">No folders</div>
+              <div className="text-zinc-400 pl-3 text-xs">フォルダなし</div>
             )}
             {sizeFolders.map((f) => {
               const total = Object.values(f.counts).reduce((a, b) => a + b, 0);
