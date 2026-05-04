@@ -261,11 +261,18 @@ export function HandwritingEditor() {
           )}
         </div>
 
-        <PixelCanvas
-          size={size}
-          pixels={currentPixels}
-          onPixelsChange={setCurrentPixels}
-        />
+        <div className="flex items-start gap-4">
+          <PixelCanvas
+            size={size}
+            pixels={currentPixels}
+            onPixelsChange={setCurrentPixels}
+          />
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-xs text-zinc-400">Preview</span>
+            <MiniPreview size={size} pixels={currentPixels} previewSize={size} />
+            <MiniPreview size={size} pixels={currentPixels} previewSize={48} />
+          </div>
+        </div>
 
         <div className="flex gap-2">
           <button
