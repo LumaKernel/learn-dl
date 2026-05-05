@@ -13,19 +13,35 @@ export class InitStrategy extends Data.TaggedClass("InitStrategy")<{
   readonly getStd: (fanIn: number, fanOut: number) => number;
 }> {}
 
+/** すべて0で初期化する。学習の出発点を確認するためのベースライン */
+export const zeroInit: InitStrategy = new InitStrategy({
+  name: "zero",
+  description: "ゼロ初期化: すべての重みを 0 にする（学習の対照実験用）",
+  getStd: () => 0,
+});
+
+/** 小さな一様乱数で初期化する。最もシンプルなランダム初期化 */
+export const smallRandom: InitStrategy = new InitStrategy({
+  name: "smallRandom",
+  description: "小さなランダム値: 標準偏差 0.01 の正規分布で初期化",
+  getStd: () => 0.01,
+});
+
+/** Xavier/Glorot 初期化。sigmoid, tanh 向け */
 export const xavier: InitStrategy = new InitStrategy({
   name: "xavier",
-  description: "Xavier/Glorot: sigmoid/tanh に適した初期化 (initialization)",
+  description: "Xavier/Glorot: sigmoid/tanh 向け、入出力サイズに応じた標準偏差",
   getStd: Rand.xavierStd,
 });
 
+/** He 初期化。ReLU 向け */
 export const he: InitStrategy = new InitStrategy({
   name: "he",
-  description: "He: ReLU に適した初期化 (initialization)",
+  description: "He: ReLU 向け、入力サイズに応じた標準偏差",
   getStd: (fanIn) => Rand.heStd(fanIn),
 });
 
-export const allInitStrategies = [xavier, he] as const;
+export const allInitStrategies = [zeroInit, smallRandom, xavier, he] as const;
 
 export const initLayer = (
   def: LayerDef,

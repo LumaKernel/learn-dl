@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CreateModelForm } from "./_components/create-model-form";
+import { ModelList } from "./_components/model-list";
 
 export default function ModelsPage() {
   return (
@@ -9,8 +11,9 @@ export default function ModelsPage() {
         </Link>
         <h1 className="text-lg font-bold">モデル一覧</h1>
       </header>
-      <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
-        <p className="text-zinc-500">準備中 — ニューラルネットワークの作成・学習・可視化機能をここに実装します</p>
+      <main className="flex-1 p-6 max-w-4xl mx-auto w-full flex flex-col gap-8">
+        <CreateModelForm />
+        <ModelList />
       </main>
     </div>
   );
