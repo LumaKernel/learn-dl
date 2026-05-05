@@ -38,6 +38,7 @@ type PixelCanvasProps = {
   readonly pixels: ReadonlyArray<PixelValue>;
   readonly onPixelsChange: (pixels: ReadonlyArray<PixelValue>) => void;
   readonly onStrokeStart?: () => void;
+  readonly onStrokeEnd?: () => void;
   readonly canvasSize?: number;
 };
 
@@ -46,6 +47,7 @@ export function PixelCanvas({
   pixels,
   onPixelsChange,
   onStrokeStart,
+  onStrokeEnd,
   canvasSize = 400,
 }: PixelCanvasProps) {
   const [isDrawing, setIsDrawing] = useState(false);
@@ -113,7 +115,8 @@ export function PixelCanvas({
   const handlePointerUp = useCallback(() => {
     setIsDrawing(false);
     lastCoordRef.current = null;
-  }, []);
+    onStrokeEnd?.();
+  }, [onStrokeEnd]);
 
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
@@ -147,8 +150,9 @@ export function PixelCanvas({
       e.preventDefault();
       setIsDrawing(false);
       lastCoordRef.current = null;
+      onStrokeEnd?.();
     },
-    [],
+    [onStrokeEnd],
   );
 
   return (
@@ -172,7 +176,7 @@ export function PixelCanvas({
         <button
           type="button"
           className="ml-4 px-3 py-1 text-sm bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
-          onClick={() => onPixelsChange(Array.from({ length: size * size }, () => 0 as const))}
+          onClick={() => { onPixelsChange(Array.from({ length: size * size }, () => 0 as const)); onStrokeEnd?.(); }}
         >
           クリア
         </button>
