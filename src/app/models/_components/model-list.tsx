@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { listModels, deleteModel, type ModelListItem } from "../actions";
+import { findTask } from "@/domain/nn/task";
 
 export function ModelList() {
   const [models, setModels] = useState<ReadonlyArray<ModelListItem>>([]);
@@ -53,7 +54,7 @@ export function ModelList() {
             >
               <span className="font-medium">{m.name}</span>
               <span className="text-xs text-zinc-500">
-                {`${String(m.layerCount) satisfies string}層 | ステップ: ${String(m.trainingStep) satisfies string}`}
+                {`${findTask(m.taskName).description satisfies string} | ${String(m.layerCount) satisfies string}層 | ステップ: ${String(m.trainingStep) satisfies string}`}
                 {m.lastLoss !== null && ` | 損失: ${m.lastLoss.toFixed(4) satisfies string}`}
               </span>
               <span className="text-xs text-zinc-400">

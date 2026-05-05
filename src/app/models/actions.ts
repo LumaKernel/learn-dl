@@ -60,6 +60,7 @@ export type ModelListItem = {
   readonly id: string;
   readonly name: string;
   readonly createdAt: number;
+  readonly taskName: string;
   readonly layerCount: number;
   readonly trainingStep: number;
   readonly lastLoss: number | null;
@@ -84,6 +85,7 @@ export async function listModels(): Promise<ReadonlyArray<ModelListItem>> {
         id: data.id,
         name: data.name,
         createdAt: data.createdAt,
+        taskName: data.taskName ?? "digitClassification",
         layerCount: data.layers.length,
         trainingStep: data.trainingStep,
         lastLoss: data.lastLoss,
