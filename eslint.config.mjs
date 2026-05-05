@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "**/*.local.*",
+    "**/*.ignore.*",
   ]),
   ...storybook.configs["flat/recommended"],
   {
