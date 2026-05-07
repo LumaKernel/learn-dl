@@ -19,6 +19,8 @@ export class TrainingConfig extends Data.TaggedClass("TrainingConfig")<{
   readonly learningRate: number;
   readonly batchSize: number;
   readonly mode: "sgd" | "minibatch";
+  /** 入力へのガウシアンノイズ (Gaussian noise) の標準偏差。0 でノイズなし。 */
+  readonly inputNoiseStd: number;
 }> {}
 
 /** 1件の学習サンプル (training sample) */

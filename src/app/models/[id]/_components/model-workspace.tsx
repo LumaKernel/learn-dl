@@ -30,6 +30,15 @@ import { LayerVisualizer } from "./layer-visualizer";
 import { TrainingPanel } from "./training-panel";
 import { DecisionBoundaryVisualizer } from "./decision-boundary-visualizer";
 
+/** Box-Muller 法によるガウス乱数生成 */
+const gaussianRandom = (): number => {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+};
+
 /**
  * ピクセル配列をループ付きで平行移動する。
  * dx > 0 は右, dy > 0 は下。はみ出した部分は反対側に回り込む。
@@ -323,7 +332,15 @@ export function ModelWorkspace({ modelId }: Props) {
                   () => Math.floor(Math.random() * trainingSamples.length),
                 );
 
-          const [updated, avgLoss] = trainStep(current, config, trainingSamples, indices);
+          // 入力ノイズ付与 (data augmentation)
+          const samplesForStep = config.inputNoiseStd > 0
+            ? trainingSamples.map((s) => new TrainingSample({
+                input: V.map(s.input, (v) => v + gaussianRandom() * config.inputNoiseStd),
+                target: s.target,
+              }))
+            : trainingSamples;
+
+          const [updated, avgLoss] = trainStep(current, config, samplesForStep, indices);
           current = updated;
           step += 1;
           loss = avgLoss;
@@ -407,6 +424,7 @@ export function ModelWorkspace({ modelId }: Props) {
             networkState={networkState}
             dataset={currentBuiltinDataset}
             trainingStep={trainingStep}
+            lossName={entry.lossName}
           />
         </div>
       ) : (

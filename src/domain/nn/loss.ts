@@ -35,4 +35,37 @@ export const crossEntropy: LossFunction = new LossFunction({
     V.sub(predicted, target),
 });
 
-export const allLossFunctions = [mse, crossEntropy] as const;
+/**
+ * 二値交差エントロピー (Binary Cross-Entropy)。
+ * シグモイド (sigmoid) 出力 + 二値分類で使用する。
+ * L = -[t·log(y) + (1-t)·log(1-y)]
+ *
+ * 勾配 (gradient) は dL/dy = (y-t) / (y·(1-y))。
+ * sigmoid の逆伝播 y·(1-y) と組み合わせると y-t に簡約される。
+ */
+export const binaryCrossEntropy: LossFunction = new LossFunction({
+  name: "binaryCrossEntropy",
+  description: "二値交差エントロピー (BCE): sigmoid 出力の二値分類向け損失関数",
+  loss: (predicted, target) => {
+    let sum = 0;
+    for (let i = 0; i < predicted.length; i++) {
+      const y = Math.max(1e-15, Math.min(1 - 1e-15, predicted.at(i)));
+      const t = target.at(i);
+      sum += -(t * Math.log(y) + (1 - t) * Math.log(1 - y));
+    }
+    return sum / predicted.length;
+  },
+  gradient: (predicted, target) => {
+    const diff = V.sub(predicted, target);
+    const denom = V.map(predicted, (y) => {
+      const clamped = Math.max(1e-15, Math.min(1 - 1e-15, y));
+      return clamped * (1 - clamped);
+    });
+    return V.scale(
+      V.from(Array.from({ length: diff.length }, (_, i) => diff.at(i) / denom.at(i))),
+      1 / predicted.length,
+    );
+  },
+});
+
+export const allLossFunctions = [mse, crossEntropy, binaryCrossEntropy] as const;

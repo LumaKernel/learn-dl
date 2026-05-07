@@ -31,7 +31,7 @@ describe("trainStep", () => {
 
   it("1ステップで重みが変化する", () => {
     const network = makeSimpleNetwork();
-    const config = new TrainingConfig({ learningRate: 0.1, batchSize: 1, mode: "sgd" });
+    const config = new TrainingConfig({ learningRate: 0.1, batchSize: 1, mode: "sgd", inputNoiseStd: 0 });
     const samples = [makeSample([1, 0, 1, 0], 0)];
 
     const oldWeights = network.params[0]?.weights;
@@ -61,7 +61,7 @@ describe("trainStep", () => {
 
   it("複数ステップで損失が減少傾向になる", () => {
     const network = makeSimpleNetwork();
-    const config = new TrainingConfig({ learningRate: 0.1, batchSize: 2, mode: "minibatch" });
+    const config = new TrainingConfig({ learningRate: 0.1, batchSize: 2, mode: "minibatch", inputNoiseStd: 0 });
     const samples = [
       makeSample([1, 0, 0, 0], 0),
       makeSample([0, 1, 0, 0], 1),
@@ -92,7 +92,7 @@ describe("trainStep", () => {
       lossFunction: crossEntropy,
     });
     const network = initNetwork(def, smallRandom, 123);
-    const config = new TrainingConfig({ learningRate: 0.5, batchSize: 3, mode: "minibatch" });
+    const config = new TrainingConfig({ learningRate: 0.5, batchSize: 3, mode: "minibatch", inputNoiseStd: 0 });
     const samples = [
       makeSample([1, 0, 0, 0], 0),
       makeSample([0, 1, 0, 0], 1),
@@ -117,7 +117,7 @@ describe("trainStep", () => {
 
   it("ゼロ入力でも重みが変化する", () => {
     const network = makeSimpleNetwork();
-    const config = new TrainingConfig({ learningRate: 0.1, batchSize: 1, mode: "sgd" });
+    const config = new TrainingConfig({ learningRate: 0.1, batchSize: 1, mode: "sgd", inputNoiseStd: 0 });
     // 全ゼロ入力 — バイアスのみが更新されるはず
     const samples = [makeSample([0, 0, 0, 0], 1)];
 

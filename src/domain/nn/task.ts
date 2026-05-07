@@ -119,7 +119,7 @@ const binaryLogicGate = new TaskDef({
   ],
   outputSize: 1,
   outputActivationName: "sigmoid",
-  defaultLossName: "mse",
+  defaultLossName: "binaryCrossEntropy",
   datasetType: "builtin",
   buildTarget: null,
   builtinDatasets: [

@@ -10,6 +10,7 @@ type Props = {
   readonly networkState: NetworkState;
   readonly dataset: BuiltinDataset | null;
   readonly trainingStep: number;
+  readonly lossName: string;
 };
 
 /**
@@ -193,7 +194,49 @@ const BoundaryLineComponent = memo(function BoundaryLineComponent({
   );
 });
 
-export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep }: Props): ReactNode {
+/**
+ * 各サンプルの損失計算式と値を生成する。
+ */
+const computeSampleLoss = (
+  lossName: string,
+  output: number,
+  target: number,
+): { readonly formula: string; readonly value: number } => {
+  const y = Math.max(1e-15, Math.min(1 - 1e-15, output));
+  const t = target;
+
+  switch (lossName) {
+    case "binaryCrossEntropy": {
+      const value = -(t * Math.log(y) + (1 - t) * Math.log(1 - y));
+      // 変数代入を見せる式を生成
+      const tLogY = t === 0 ? "0" : `${String(t) satisfies string}·log(${y.toFixed(4) satisfies string})`;
+      const oneMinusT = 1 - t;
+      const oneMinusTLogOneMinusY = oneMinusT === 0
+        ? "0"
+        : `${String(oneMinusT) satisfies string}·log(${(1 - y).toFixed(4) satisfies string})`;
+      const formula = `-[${tLogY satisfies string} + ${oneMinusTLogOneMinusY satisfies string}]`;
+      return { formula, value };
+    }
+    case "mse": {
+      const value = (y - t) ** 2;
+      const formula = `(${y.toFixed(4) satisfies string} - ${String(t) satisfies string})²`;
+      return { formula, value };
+    }
+    case "crossEntropy": {
+      const value = t === 0 ? 0 : -t * Math.log(y);
+      const formula = t === 0
+        ? "0"
+        : `-${String(t) satisfies string}·log(${y.toFixed(4) satisfies string})`;
+      return { formula, value };
+    }
+    default: {
+      const value = Math.abs(output - target);
+      return { formula: `|${output.toFixed(4) satisfies string} - ${String(target) satisfies string}|`, value };
+    }
+  }
+};
+
+export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep, lossName }: Props): ReactNode {
   const SIZE = 400;
   const RANGE_MIN = -0.5;
   const RANGE_MAX = 1.5;
@@ -377,16 +420,16 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
                   <tr className="border-b border-zinc-300 dark:border-zinc-600">
                     <th className="px-2 py-1 text-left">x₁</th>
                     <th className="px-2 py-1 text-left">x₂</th>
-                    <th className="px-2 py-1 text-left">目標</th>
-                    <th className="px-2 py-1 text-left">出力</th>
-                    <th className="px-2 py-1 text-left">誤差</th>
+                    <th className="px-2 py-1 text-left">目標 t</th>
+                    <th className="px-2 py-1 text-left">出力 y</th>
+                    <th className="px-2 py-1 text-left">損失 L</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dataset.samples.map((sample, i) => {
                     const output = dataPointOutputs[i] ?? 0;
                     const target = sample.target[0] ?? 0;
-                    const error = Math.abs(output - target);
+                    const sampleLoss = computeSampleLoss(lossName, output, target);
                     const isCorrect = (output > 0.5) === (target > 0.5);
                     return (
                       <tr
@@ -397,14 +440,33 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
                         <td className="px-2 py-1">{String(sample.input[1] ?? 0)}</td>
                         <td className="px-2 py-1 font-medium">{String(target)}</td>
                         <td className="px-2 py-1">{output.toFixed(4)}</td>
-                        <td className={`px-2 py-1 ${(error > 0.3 ? "text-red-500" : error > 0.1 ? "text-amber-500" : "text-green-500") satisfies string}`}>
-                          {error.toFixed(4)}
+                        <td className={`px-2 py-1 ${(sampleLoss.value > 0.5 ? "text-red-500" : sampleLoss.value > 0.1 ? "text-amber-500" : "text-green-500") satisfies string}`}>
+                          {sampleLoss.value.toFixed(4)}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {/* 損失関数の計算式展開 */}
+              <div className="mt-1 flex flex-col gap-0.5">
+                <span className="text-[10px] font-medium text-zinc-400">各サンプルの損失計算</span>
+                {dataset.samples.map((sample, i) => {
+                  const output = dataPointOutputs[i] ?? 0;
+                  const target = sample.target[0] ?? 0;
+                  const sampleLoss = computeSampleLoss(lossName, output, target);
+                  return (
+                    <div key={i} className="text-[10px] font-mono text-zinc-500">
+                      <span className="text-zinc-400">
+                        {`(${String(sample.input[0] ?? 0) satisfies string},${String(sample.input[1] ?? 0) satisfies string})`}
+                      </span>
+                      {" L = "}
+                      {sampleLoss.formula}
+                      {` = ${sampleLoss.value.toFixed(4) satisfies string}`}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -437,7 +499,7 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
               </div>
               {currentBoundary && (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-0.5 bg-black" />
+                  <div className="w-4 h-0.5 bg-zinc-800 dark:bg-zinc-200" />
                   <span>決定境界 (Wx+b=0)</span>
                 </div>
               )}

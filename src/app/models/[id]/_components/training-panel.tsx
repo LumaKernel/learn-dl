@@ -100,9 +100,13 @@ export function TrainingPanel({
   onCancel,
 }: Props) {
   const [learningRate, setLearningRate] = useState("0.01");
-  const [batchSize, setBatchSize] = useState("32");
+  // バッチサイズはサンプル数でcap
+  const defaultBatchSize = Math.min(32, sampleCount > 0 ? sampleCount : 32);
+  const [batchSize, setBatchSize] = useState(String(defaultBatchSize));
   const [mode, setMode] = useState<"sgd" | "minibatch">("minibatch");
-  const [stepCount, setStepCount] = useState("1");
+  const [stepCount, setStepCount] = useState("100");
+  const [inputNoise, setInputNoise] = useState(false);
+  const [inputNoiseStd, setInputNoiseStd] = useState("0.1");
   const [paramError, setParamError] = useState<string | null>(null);
 
   const handleTrain = useCallback(
@@ -119,14 +123,21 @@ export function TrainingPanel({
         return;
       }
 
+      const noiseStd = inputNoise ? parseFloat(inputNoiseStd) : 0;
+      if (inputNoise && (Number.isNaN(noiseStd) || noiseStd < 0)) {
+        setParamError("ノイズ強度が不正です（0以上の数を入力してください）");
+        return;
+      }
+
       const config = new TrainingConfig({
         learningRate: lr,
         batchSize: bs,
         mode,
+        inputNoiseStd: noiseStd,
       });
       onTrainStep(config, steps);
     },
-    [learningRate, batchSize, mode, onTrainStep],
+    [learningRate, batchSize, mode, inputNoise, inputNoiseStd, onTrainStep],
   );
 
   return (
@@ -245,6 +256,31 @@ export function TrainingPanel({
         </label>
       </div>
 
+      {/* 入力ノイズ (data augmentation) */}
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={inputNoise}
+            onChange={(e) => setInputNoise(e.target.checked)}
+            className="rounded"
+          />
+          入力ノイズ付与 (data augmentation)
+        </label>
+        {inputNoise && (
+          <label className="flex items-center gap-1 text-xs">
+            <span className="text-zinc-500">標準偏差 (σ):</span>
+            <input
+              type="number"
+              step="0.01"
+              className="w-20 border border-zinc-300 dark:border-zinc-600 rounded px-1.5 py-0.5 text-xs bg-transparent"
+              value={inputNoiseStd}
+              onChange={(e) => setInputNoiseStd(e.target.value)}
+            />
+          </label>
+        )}
+      </div>
+
       {paramError && (
         <p className="text-sm text-red-500">{paramError}</p>
       )}
@@ -262,17 +298,9 @@ export function TrainingPanel({
           type="button"
           className="px-3 py-1.5 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50"
           disabled={isPending || isTraining || (!builtinDatasets && sampleCount === 0)}
-          onClick={() => handleTrain(parseInt(stepCount, 10) || 10)}
+          onClick={() => handleTrain(parseInt(stepCount, 10) || 100)}
         >
-          {`${String(parseInt(stepCount, 10) || 10) satisfies string}ステップ実行 (カスタム)`}
-        </button>
-        <button
-          type="button"
-          className="px-3 py-1.5 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-          disabled={isPending || isTraining || (!builtinDatasets && sampleCount === 0)}
-          onClick={() => handleTrain(100)}
-        >
-          100ステップ実行
+          {`${String(parseInt(stepCount, 10) || 100) satisfies string}ステップ実行`}
         </button>
         <button
           type="button"
