@@ -28,6 +28,7 @@ type Props = {
   readonly builtinDatasets: ReadonlyArray<BuiltinDataset> | null;
   readonly builtinDatasetName: string | null;
   readonly onSelectBuiltinDataset: (name: string) => void;
+  readonly onCancel: () => void;
 };
 
 function LossGraph({ history }: { readonly history: ReadonlyArray<number> }) {
@@ -96,6 +97,7 @@ export function TrainingPanel({
   builtinDatasets,
   builtinDatasetName,
   onSelectBuiltinDataset,
+  onCancel,
 }: Props) {
   const [learningRate, setLearningRate] = useState("0.01");
   const [batchSize, setBatchSize] = useState("32");
@@ -290,6 +292,13 @@ export function TrainingPanel({
             <span>
               {`学習中... ${String(trainingProgress.current) satisfies string} / ${String(trainingProgress.total) satisfies string} (${String(Math.round((trainingProgress.current / trainingProgress.total) * 100)) satisfies string}%)`}
             </span>
+            <button
+              type="button"
+              className="px-2 py-0.5 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+              onClick={onCancel}
+            >
+              中止
+            </button>
           </div>
           <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded overflow-hidden">
             <div

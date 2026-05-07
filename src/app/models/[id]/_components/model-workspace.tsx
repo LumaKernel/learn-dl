@@ -241,6 +241,7 @@ export function ModelWorkspace({ modelId }: Props) {
   // 学習中の状態管理
   const [isTraining, setIsTraining] = useState(false);
   const [trainingProgress, setTrainingProgress] = useState<{ readonly current: number; readonly total: number } | null>(null);
+  const cancelTrainingRef = useRef(false);
 
   // 学習ステップ実行 (execute training step)
   // 10ステップごとにUIに制御を返し、プログレス表示を更新する
@@ -289,6 +290,7 @@ export function ModelWorkspace({ modelId }: Props) {
         });
       }
 
+      cancelTrainingRef.current = false;
       setIsTraining(true);
       setTrainingProgress({ current: 0, total: steps });
 
@@ -299,7 +301,18 @@ export function ModelWorkspace({ modelId }: Props) {
       const allNewLosses: number[] = [];
       let completed = 0;
 
+      const finalize = () => {
+        setLossHistory((prev) => [...prev, ...allNewLosses]);
+        setIsTraining(false);
+        setTrainingProgress(null);
+      };
+
       const runChunk = () => {
+        if (cancelTrainingRef.current) {
+          finalize();
+          return;
+        }
+
         const end = Math.min(completed + CHUNK_SIZE, steps);
         for (let i = completed; i < end; i++) {
           const indices =
@@ -328,10 +341,7 @@ export function ModelWorkspace({ modelId }: Props) {
           // 次のチャンクをスケジュール (UIに制御を返す)
           requestAnimationFrame(runChunk);
         } else {
-          // 完了
-          setLossHistory((prev) => [...prev, ...allNewLosses]);
-          setIsTraining(false);
-          setTrainingProgress(null);
+          finalize();
         }
       };
 
@@ -339,6 +349,10 @@ export function ModelWorkspace({ modelId }: Props) {
     },
     [],
   );
+
+  const handleCancelTraining = useCallback(() => {
+    cancelTrainingRef.current = true;
+  }, []);
 
   if (!entry || !networkState) {
     return (
@@ -511,6 +525,7 @@ export function ModelWorkspace({ modelId }: Props) {
         builtinDatasets={task?.builtinDatasets ?? null}
         builtinDatasetName={builtinDatasetName ?? task?.builtinDatasets?.[0]?.name ?? null}
         onSelectBuiltinDataset={setBuiltinDatasetName}
+        onCancel={handleCancelTraining}
       />
     </div>
   );
