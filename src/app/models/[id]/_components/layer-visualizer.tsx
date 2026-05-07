@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayerParams } from "@/domain/nn/layer";
 import type { SerializedLayerDef } from "../../actions";
 
@@ -330,29 +330,58 @@ function SmallInputWeightDetail({
   layerParams,
   inputLabels,
   activations,
+  layerIdx,
+  selectedNeuron,
+  onSelectNeuron,
+  /** 前の層で選択されたニューロンのインデックス (このニューロンからの入力重みをハイライト) */
+  highlightInputIdx,
 }: {
   readonly layerParams: LayerParams;
   readonly inputLabels: ReadonlyArray<string>;
   readonly activations: ReadonlyArray<number> | undefined;
+  readonly layerIdx: number;
+  readonly selectedNeuron: { readonly layerIdx: number; readonly neuronIdx: number } | null;
+  readonly onSelectNeuron: (layerIdx: number, neuronIdx: number) => void;
+  readonly highlightInputIdx: number | null;
 }) {
   const { weights, bias } = layerParams;
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] text-zinc-400">ニューロン別の重み・バイアス</span>
+      <span className="text-[10px] text-zinc-400">
+        ニューロン別の重み・バイアス
+        {highlightInputIdx !== null && (
+          <span className="text-amber-500">
+            {` — 前層 n${String(highlightInputIdx) satisfies string} からの影響をハイライト中`}
+          </span>
+        )}
+      </span>
       {weights.data.map((row, neuronIdx) => {
         const act = activations?.[neuronIdx];
+        const isSelected = selectedNeuron?.layerIdx === layerIdx && selectedNeuron.neuronIdx === neuronIdx;
         return (
           <div
             key={neuronIdx}
-            className="flex items-center gap-2 text-[11px] font-mono bg-zinc-50 dark:bg-zinc-800 rounded px-2 py-1"
+            className={`flex items-center gap-2 text-[11px] font-mono rounded px-2 py-1 cursor-pointer transition-colors ${
+              (isSelected
+                ? "bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-400"
+                : "bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700") satisfies string
+            }`}
+            onClick={() => onSelectNeuron(layerIdx, neuronIdx)}
           >
-            <span className="text-zinc-500 w-6 shrink-0">{`n${String(neuronIdx) satisfies string}`}</span>
-            {row.data.map((w, j) => (
-              <span key={j}>
-                <span className="text-zinc-400">{inputLabels[j] ?? `x${String(j) satisfies string}`}:</span>
-                <span className={w >= 0 ? "text-blue-600" : "text-red-600"}>{w.toFixed(3)}</span>
-              </span>
-            ))}
+            <span className={`w-6 shrink-0 ${(isSelected ? "text-amber-600 font-bold" : "text-zinc-500") satisfies string}`}>
+              {`n${String(neuronIdx) satisfies string}`}
+            </span>
+            {row.data.map((w, j) => {
+              const isHighlighted = highlightInputIdx === j;
+              return (
+                <span key={j} className={isHighlighted ? "bg-amber-200 dark:bg-amber-800/40 rounded px-0.5" : ""}>
+                  <span className="text-zinc-400">{inputLabels[j] ?? `x${String(j) satisfies string}`}:</span>
+                  <span className={`${(isHighlighted ? "font-bold " : "") satisfies string}${(w >= 0 ? "text-blue-600" : "text-red-600") satisfies string}`}>
+                    {w.toFixed(3)}
+                  </span>
+                </span>
+              );
+            })}
             <span>
               <span className="text-zinc-400">b:</span>
               <span className={bias.at(neuronIdx) >= 0 ? "text-blue-600" : "text-red-600"}>
@@ -381,6 +410,15 @@ export function LayerVisualizer({ layers, params, layerOutputs, inputPixels, gri
     ? Array.from({ length: firstLayerInputSize }, (_, i) => `x${String(i + 1) satisfies string}`)
     : [];
 
+  // 選択中のニューロン (クリックで次の層への影響を確認する)
+  const [selectedNeuron, setSelectedNeuron] = useState<{ readonly layerIdx: number; readonly neuronIdx: number } | null>(null);
+
+  const handleSelectNeuron = useCallback((layerIdx: number, neuronIdx: number) => {
+    setSelectedNeuron((prev) =>
+      prev?.layerIdx === layerIdx && prev.neuronIdx === neuronIdx ? null : { layerIdx, neuronIdx },
+    );
+  }, []);
+
   return (
     <div className="flex flex-col gap-4">
       <h3 className="font-medium text-sm text-zinc-600 dark:text-zinc-400">
@@ -390,6 +428,16 @@ export function LayerVisualizer({ layers, params, layerOutputs, inputPixels, gri
       {layers.map((layerDef, idx) => {
         const layerParams = params[idx];
         const output = layerOutputs[idx];
+
+        // この層で、前の層の選択ニューロンからのハイライト対象インデックス
+        const highlightInputIdx = selectedNeuron?.layerIdx === idx - 1
+          ? selectedNeuron.neuronIdx
+          : null;
+
+        // この層の入力ラベル (1層目はx1,x2,...、2層目以降はn0,n1,...)
+        const layerInputLabels = idx === 0
+          ? inputLabels
+          : Array.from({ length: layerDef.inputSize }, (_, i) => `n${String(i) satisfies string}`);
 
         return (
           <div
@@ -426,20 +474,58 @@ export function LayerVisualizer({ layers, params, layerOutputs, inputPixels, gri
               )}
             </div>
 
-            {/* 1層目: 入力が小さい場合は数値詳細、大きい場合はニューロン画像 */}
-            {idx === 0 && layerParams && (
+            {/* 小規模入力: 全層で数値詳細表示、大規模入力: 1層目のみニューロン画像 */}
+            {layerParams && (
               isSmallInput
                 ? <SmallInputWeightDetail
                     layerParams={layerParams}
-                    inputLabels={inputLabels}
+                    inputLabels={layerInputLabels}
                     activations={output}
+                    layerIdx={idx}
+                    selectedNeuron={selectedNeuron}
+                    onSelectNeuron={handleSelectNeuron}
+                    highlightInputIdx={highlightInputIdx}
                   />
-                : <NeuronWeightImages
-                    layerParams={layerParams}
-                    inputWidth={inputWidth}
-                    activations={output}
-                    inputPixels={inputPixels}
-                  />
+                : idx === 0
+                  ? <NeuronWeightImages
+                      layerParams={layerParams}
+                      inputWidth={inputWidth}
+                      activations={output}
+                      inputPixels={inputPixels}
+                    />
+                  : null
+            )}
+
+            {/* 選択ニューロンの次層への影響サマリー */}
+            {selectedNeuron?.layerIdx === idx && layerParams && idx < layers.length - 1 && (
+              (() => {
+                const nextParams = params[idx + 1];
+                if (!nextParams) return null;
+                const nIdx = selectedNeuron.neuronIdx;
+                // 次層の各ニューロンが、選択ニューロンからどれだけの重みで接続されているか
+                const influences = nextParams.weights.data.map((row) => row.at(nIdx));
+                const maxAbs = influences.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+                return (
+                  <div className="mt-1 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-300 dark:border-amber-700">
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                      {`n${String(nIdx) satisfies string} → 次層 (層${String(idx + 2) satisfies string}) への結合重み`}
+                    </span>
+                    <div className="flex gap-2 mt-1 flex-wrap">
+                      {influences.map((w, i) => (
+                        <span key={i} className="text-[11px] font-mono">
+                          <span className="text-zinc-400">{`n${String(i) satisfies string}:`}</span>
+                          <span
+                            className={w >= 0 ? "text-blue-600" : "text-red-600"}
+                            style={{ opacity: maxAbs > 0 ? 0.3 + 0.7 * (Math.abs(w) / maxAbs) : 1 }}
+                          >
+                            {w.toFixed(3)}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
         );
