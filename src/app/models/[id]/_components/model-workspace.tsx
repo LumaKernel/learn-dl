@@ -233,24 +233,19 @@ export function ModelWorkspace({ modelId }: Props) {
   // 組み込みデータセットの現在の選択
   const currentBuiltinDataset = task?.builtinDatasets?.find((d) => d.name === builtinDatasetName) ?? task?.builtinDatasets?.[0] ?? null;
 
-  // 組み込みタスク用のレイヤー出力 (全サンプル平均)
+  // 組み込みタスク: レイヤー出力の対象サンプル
+  const [selectedSampleIdx, setSelectedSampleIdx] = useState(0);
+
+  // 組み込みタスク用のレイヤー出力 (選択サンプルに対して計算)
   const builtinLayerOutputs = useMemo(() => {
     if (!isBuiltinTask || !networkState || !currentBuiltinDataset) {
       return [] as ReadonlyArray<ReadonlyArray<number>>;
     }
-    // 全サンプルの出力を平均して表示（各ニューロンの応答の全体像）
-    const allCaches = currentBuiltinDataset.samples.map((s) =>
-      forwardNetwork(networkState)(V.from(s.input)),
-    );
-    const layerCount = allCaches[0]?.length ?? 0;
-    return Array.from({ length: layerCount }, (_, layerIdx) => {
-      const neuronCount = allCaches[0]?.[layerIdx]?.output.length ?? 0;
-      return Array.from({ length: neuronCount }, (_, neuronIdx) => {
-        const sum = allCaches.reduce((acc, caches) => acc + (caches[layerIdx]?.output.at(neuronIdx) ?? 0), 0);
-        return sum / allCaches.length;
-      });
-    });
-  }, [isBuiltinTask, networkState, currentBuiltinDataset]);
+    const sample = currentBuiltinDataset.samples[selectedSampleIdx] ?? currentBuiltinDataset.samples[0];
+    if (!sample) return [] as ReadonlyArray<ReadonlyArray<number>>;
+    const caches = forwardNetwork(networkState)(V.from(sample.input));
+    return caches.map((c) => [...c.output.data]);
+  }, [isBuiltinTask, networkState, currentBuiltinDataset, selectedSampleIdx]);
 
   // モデル保存 (save model)
   const handleSave = useCallback(() => {
@@ -445,8 +440,33 @@ export function ModelWorkspace({ modelId }: Props) {
             dataset={currentBuiltinDataset}
             trainingStep={trainingStep}
             lossName={entry.lossName}
+            selectedSampleIdx={selectedSampleIdx}
+            onSelectSample={setSelectedSampleIdx}
           />
-          {/* レイヤー可視化 (layer visualization) */}
+          {/* サンプル選択 + レイヤー可視化 (sample selection + layer visualization) */}
+          {currentBuiltinDataset && (
+            <div className="flex flex-col gap-2">
+              <h3 className="font-medium text-sm text-zinc-600 dark:text-zinc-400">
+                中間出力の対象サンプル
+              </h3>
+              <div className="flex gap-2 flex-wrap">
+                {currentBuiltinDataset.samples.map((sample, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`px-3 py-1.5 text-sm rounded border ${
+                      (idx === selectedSampleIdx
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "bg-transparent border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800") satisfies string
+                    }`}
+                    onClick={() => setSelectedSampleIdx(idx)}
+                  >
+                    {`(${sample.input.join(", ") satisfies string})`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <LayerVisualizer
             layers={entry.layers}
             params={networkState.params}

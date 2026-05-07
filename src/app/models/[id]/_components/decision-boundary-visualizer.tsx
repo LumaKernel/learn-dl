@@ -11,6 +11,8 @@ type Props = {
   readonly dataset: BuiltinDataset | null;
   readonly trainingStep: number;
   readonly lossName: string;
+  readonly selectedSampleIdx: number;
+  readonly onSelectSample: (idx: number) => void;
 };
 
 /**
@@ -236,7 +238,7 @@ const computeSampleLoss = (
   }
 };
 
-export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep, lossName }: Props): ReactNode {
+export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep, lossName, selectedSampleIdx, onSelectSample }: Props): ReactNode {
   const SIZE = 400;
   const RANGE_MIN = -0.5;
   const RANGE_MAX = 1.5;
@@ -382,8 +384,20 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
             const fillColor = target > 0.5 ? "#2563eb" : "#dc2626";
             // 出力値に基づく枠の色
             const strokeColor = output > 0.5 ? "#2563eb" : "#dc2626";
+            const isSelected = i === selectedSampleIdx;
             return (
-              <g key={i}>
+              <g key={i} onClick={() => onSelectSample(i)} className="cursor-pointer">
+                {/* 選択中のハイライトリング */}
+                {isSelected && (
+                  <circle
+                    cx={px}
+                    cy={py}
+                    r={19}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth={2.5}
+                  />
+                )}
                 <circle
                   cx={px}
                   cy={py}
@@ -401,6 +415,7 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
                   fill="white"
                   textAnchor="middle"
                   fontWeight="bold"
+                  style={{ pointerEvents: "none" }}
                 >
                   {output.toFixed(2)}
                 </text>
@@ -431,10 +446,12 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
                     const target = sample.target[0] ?? 0;
                     const sampleLoss = computeSampleLoss(lossName, output, target);
                     const isCorrect = (output > 0.5) === (target > 0.5);
+                    const isSelected = i === selectedSampleIdx;
                     return (
                       <tr
                         key={i}
-                        className={`border-b border-zinc-200 dark:border-zinc-700 ${(isCorrect ? "" : "bg-red-50 dark:bg-red-900/20") satisfies string}`}
+                        className={`border-b border-zinc-200 dark:border-zinc-700 cursor-pointer ${(isSelected ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-400" : isCorrect ? "" : "bg-red-50 dark:bg-red-900/20") satisfies string}`}
+                        onClick={() => onSelectSample(i)}
                       >
                         <td className="px-2 py-1">{String(sample.input[0] ?? 0)}</td>
                         <td className="px-2 py-1">{String(sample.input[1] ?? 0)}</td>
