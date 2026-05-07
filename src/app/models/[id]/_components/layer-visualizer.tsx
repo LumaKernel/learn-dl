@@ -9,6 +9,8 @@ type Props = {
   readonly params: ReadonlyArray<LayerParams>;
   readonly layerOutputs: ReadonlyArray<ReadonlyArray<number>>;
   readonly inputPixels: ReadonlyArray<number>;
+  /** null の場合はピクセルグリッドを使わない入力 (例: 論理ゲート) */
+  readonly gridSize: number | null;
 };
 
 /**
@@ -321,10 +323,63 @@ function ActivationBar({
   );
 }
 
-export function LayerVisualizer({ layers, params, layerOutputs, inputPixels }: Props) {
+/**
+ * 小規模入力 (論理ゲート等) の1層目の重み・バイアスを数値で詳細表示する。
+ */
+function SmallInputWeightDetail({
+  layerParams,
+  inputLabels,
+  activations,
+}: {
+  readonly layerParams: LayerParams;
+  readonly inputLabels: ReadonlyArray<string>;
+  readonly activations: ReadonlyArray<number> | undefined;
+}) {
+  const { weights, bias } = layerParams;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] text-zinc-400">ニューロン別の重み・バイアス</span>
+      {weights.data.map((row, neuronIdx) => {
+        const act = activations?.[neuronIdx];
+        return (
+          <div
+            key={neuronIdx}
+            className="flex items-center gap-2 text-[11px] font-mono bg-zinc-50 dark:bg-zinc-800 rounded px-2 py-1"
+          >
+            <span className="text-zinc-500 w-6 shrink-0">{`n${String(neuronIdx) satisfies string}`}</span>
+            {row.data.map((w, j) => (
+              <span key={j}>
+                <span className="text-zinc-400">{inputLabels[j] ?? `x${String(j) satisfies string}`}:</span>
+                <span className={w >= 0 ? "text-blue-600" : "text-red-600"}>{w.toFixed(3)}</span>
+              </span>
+            ))}
+            <span>
+              <span className="text-zinc-400">b:</span>
+              <span className={bias.at(neuronIdx) >= 0 ? "text-blue-600" : "text-red-600"}>
+                {bias.at(neuronIdx).toFixed(3)}
+              </span>
+            </span>
+            {act !== undefined && (
+              <span className="ml-auto text-zinc-500">
+                {`→ ${act.toFixed(4) satisfies string}`}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function LayerVisualizer({ layers, params, layerOutputs, inputPixels, gridSize }: Props) {
+  const isSmallInput = gridSize === null;
   // 1層目の入力幅を計算（28x28=784 → 幅28, 64x64=4096 → 幅64）
   const firstLayerInputSize = layers[0]?.inputSize ?? 784;
-  const inputWidth = Math.round(Math.sqrt(firstLayerInputSize));
+  const inputWidth = isSmallInput ? firstLayerInputSize : Math.round(Math.sqrt(firstLayerInputSize));
+  // 小規模入力用のラベル
+  const inputLabels = isSmallInput
+    ? Array.from({ length: firstLayerInputSize }, (_, i) => `x${String(i + 1) satisfies string}`)
+    : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -371,14 +426,20 @@ export function LayerVisualizer({ layers, params, layerOutputs, inputPixels }: P
               )}
             </div>
 
-            {/* 1層目: ニューロンの重みを画像として可視化 */}
+            {/* 1層目: 入力が小さい場合は数値詳細、大きい場合はニューロン画像 */}
             {idx === 0 && layerParams && (
-              <NeuronWeightImages
-                layerParams={layerParams}
-                inputWidth={inputWidth}
-                activations={output}
-                inputPixels={inputPixels}
-              />
+              isSmallInput
+                ? <SmallInputWeightDetail
+                    layerParams={layerParams}
+                    inputLabels={inputLabels}
+                    activations={output}
+                  />
+                : <NeuronWeightImages
+                    layerParams={layerParams}
+                    inputWidth={inputWidth}
+                    activations={output}
+                    inputPixels={inputPixels}
+                  />
             )}
           </div>
         );

@@ -230,6 +230,28 @@ export function ModelWorkspace({ modelId }: Props) {
     };
   }, [networkState, committedPixels]);
 
+  // 組み込みデータセットの現在の選択
+  const currentBuiltinDataset = task?.builtinDatasets?.find((d) => d.name === builtinDatasetName) ?? task?.builtinDatasets?.[0] ?? null;
+
+  // 組み込みタスク用のレイヤー出力 (全サンプル平均)
+  const builtinLayerOutputs = useMemo(() => {
+    if (!isBuiltinTask || !networkState || !currentBuiltinDataset) {
+      return [] as ReadonlyArray<ReadonlyArray<number>>;
+    }
+    // 全サンプルの出力を平均して表示（各ニューロンの応答の全体像）
+    const allCaches = currentBuiltinDataset.samples.map((s) =>
+      forwardNetwork(networkState)(V.from(s.input)),
+    );
+    const layerCount = allCaches[0]?.length ?? 0;
+    return Array.from({ length: layerCount }, (_, layerIdx) => {
+      const neuronCount = allCaches[0]?.[layerIdx]?.output.length ?? 0;
+      return Array.from({ length: neuronCount }, (_, neuronIdx) => {
+        const sum = allCaches.reduce((acc, caches) => acc + (caches[layerIdx]?.output.at(neuronIdx) ?? 0), 0);
+        return sum / allCaches.length;
+      });
+    });
+  }, [isBuiltinTask, networkState, currentBuiltinDataset]);
+
   // モデル保存 (save model)
   const handleSave = useCallback(() => {
     if (!entry || !networkState) {
@@ -386,8 +408,6 @@ export function ModelWorkspace({ modelId }: Props) {
       )
     : null;
 
-  // 組み込みデータセットの現在の選択
-  const currentBuiltinDataset = task?.builtinDatasets?.find((d) => d.name === builtinDatasetName) ?? task?.builtinDatasets?.[0] ?? null;
   const builtinSampleCount = currentBuiltinDataset?.samples.length ?? 0;
 
   return (
@@ -425,6 +445,14 @@ export function ModelWorkspace({ modelId }: Props) {
             dataset={currentBuiltinDataset}
             trainingStep={trainingStep}
             lossName={entry.lossName}
+          />
+          {/* レイヤー可視化 (layer visualization) */}
+          <LayerVisualizer
+            layers={entry.layers}
+            params={networkState.params}
+            layerOutputs={builtinLayerOutputs}
+            inputPixels={[]}
+            gridSize={null}
           />
         </div>
       ) : (
@@ -520,6 +548,7 @@ export function ModelWorkspace({ modelId }: Props) {
               params={networkState.params}
               layerOutputs={layerOutputs}
               inputPixels={committedPixels}
+              gridSize={gridSize}
             />
           </div>
         </div>
