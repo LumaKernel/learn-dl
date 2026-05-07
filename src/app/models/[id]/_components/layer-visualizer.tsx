@@ -361,7 +361,7 @@ function SmallInputWeightDetail({
         return (
           <div
             key={neuronIdx}
-            className={`flex items-center gap-2 text-[11px] font-mono rounded px-2 py-1 cursor-pointer transition-colors ${
+            className={`flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-mono rounded px-2 py-1 cursor-pointer transition-colors ${
               (isSelected
                 ? "bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-400"
                 : "bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700") satisfies string
