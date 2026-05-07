@@ -28,6 +28,7 @@ import { PixelCanvas } from "@/app/datasets/handwriting/_components/pixel-canvas
 import { findTask } from "@/domain/nn/task";
 import { LayerVisualizer } from "./layer-visualizer";
 import { TrainingPanel } from "./training-panel";
+import { DecisionBoundaryVisualizer } from "./decision-boundary-visualizer";
 
 /**
  * ピクセル配列をループ付きで平行移動する。
@@ -136,8 +137,12 @@ export function ModelWorkspace({ modelId }: Props) {
     entryRef.current = entry;
   }, [entry]);
 
+  const builtinDatasetNameRef = useRef<string | null>(null);
+
   const inputSize = entry ? (entry.layers[0]?.inputSize ?? 784) : 784;
-  const gridSize: GridSize = inputSize === 4096 ? 64 : 28;
+  const task = entry ? findTask(entry.taskName) : null;
+  const isBuiltinTask = task?.datasetType === "builtin";
+  const gridSize: GridSize | null = isBuiltinTask ? null : (inputSize === 4096 ? 64 : 28);
 
   // モデル読み込み (load model)
   useEffect(() => {
@@ -160,24 +165,32 @@ export function ModelWorkspace({ modelId }: Props) {
     });
   }, [modelId]);
 
-  // フォルダ一覧の読み込み (load folder list)
+  // 組み込みデータセット選択 (builtin dataset selection)
+  const [builtinDatasetName, setBuiltinDatasetName] = useState<string | null>(null);
   useEffect(() => {
+    builtinDatasetNameRef.current = builtinDatasetName;
+  }, [builtinDatasetName]);
+
+  // フォルダ一覧の読み込み (load folder list) — handwriting タスクのみ
+  useEffect(() => {
+    if (isBuiltinTask) return;
     startTransition(async () => {
       const f = await listFolders();
       setFolders(f);
     });
-  }, []);
+  }, [isBuiltinTask]);
 
-  // データセット読み込み (load dataset)
+  // データセット読み込み (load dataset) — handwriting タスクのみ
   useEffect(() => {
+    if (isBuiltinTask || gridSize === null) return;
     startTransition(async () => {
       const loaded = await loadDatasetSamples(gridSize, selectedFolder);
       setSamples(loaded);
     });
-  }, [gridSize, selectedFolder]);
+  }, [gridSize, selectedFolder, isBuiltinTask]);
 
-  // テスト入力のピクセルサイズ同期 (setState during render パターン)
-  if (inputSize !== prevInputSize) {
+  // テスト入力のピクセルサイズ同期 (setState during render パターン) — handwriting タスクのみ
+  if (!isBuiltinTask && inputSize !== prevInputSize) {
     setPrevInputSize(inputSize);
     setTestPixels(Array.from({ length: inputSize }, () => 0 as const));
     setCommittedPixels(Array.from({ length: inputSize }, () => 0 as const));
@@ -238,21 +251,43 @@ export function ModelWorkspace({ modelId }: Props) {
       if (!currentNetwork) {
         throw new Error("ネットワークが未初期化の状態で学習を実行しようとしました");
       }
-      if (currentSamples.length === 0) {
-        throw new Error("データセットが空の状態で学習を実行しようとしました");
-      }
 
       const currentEntry = entryRef.current;
       if (!currentEntry) {
         throw new Error("モデルが未読み込みの状態で学習を実行しようとしました");
       }
-      const task = findTask(currentEntry.taskName);
+      const currentTask = findTask(currentEntry.taskName);
 
-      const trainingSamples: ReadonlyArray<TrainingSample> = currentSamples.map((s) => {
-        const inputVec = V.from(s.pixels.map((p) => (p === 1 ? 1 : 0)));
-        const target = V.from(task.buildTarget(s.digit));
-        return new TrainingSample({ input: inputVec, target });
-      });
+      let trainingSamples: ReadonlyArray<TrainingSample>;
+
+      if (currentTask.datasetType === "builtin") {
+        // 組み込みデータセットからサンプル生成
+        const datasets = currentTask.builtinDatasets;
+        if (!datasets) {
+          throw new Error("組み込みデータセットが定義されていません");
+        }
+        const datasetName = builtinDatasetNameRef.current;
+        const dataset = datasets.find((d) => d.name === datasetName) ?? datasets[0];
+        if (!dataset) {
+          throw new Error("組み込みデータセットが見つかりません");
+        }
+        trainingSamples = dataset.samples.map((s) =>
+          new TrainingSample({ input: V.from(s.input), target: V.from(s.target) }),
+        );
+      } else {
+        if (currentSamples.length === 0) {
+          throw new Error("データセットが空の状態で学習を実行しようとしました");
+        }
+        const buildTarget = currentTask.buildTarget;
+        if (!buildTarget) {
+          throw new Error("buildTarget が定義されていません");
+        }
+        trainingSamples = currentSamples.map((s) => {
+          const inputVec = V.from(s.pixels.map((p) => (p === 1 ? 1 : 0)));
+          const target = V.from(buildTarget(s.digit));
+          return new TrainingSample({ input: inputVec, target });
+        });
+      }
 
       setIsTraining(true);
       setTrainingProgress({ current: 0, total: steps });
@@ -320,6 +355,10 @@ export function ModelWorkspace({ modelId }: Props) {
       )
     : null;
 
+  // 組み込みデータセットの現在の選択
+  const currentBuiltinDataset = task?.builtinDatasets?.find((d) => d.name === builtinDatasetName) ?? task?.builtinDatasets?.[0] ?? null;
+  const builtinSampleCount = currentBuiltinDataset?.samples.length ?? 0;
+
   return (
     <div className="flex flex-col gap-6">
       {/* ヘッダー情報 */}
@@ -346,101 +385,117 @@ export function ModelWorkspace({ modelId }: Props) {
         </div>
       </div>
 
-      <div className="flex gap-6 flex-wrap">
-        {/* テスト入力 (test input) */}
-        <div className="flex flex-col gap-3">
-          <h3 className="font-medium text-sm text-zinc-600 dark:text-zinc-400">
-            テスト入力 (test input)
-          </h3>
-          <div className="flex items-start gap-3">
-            <PixelCanvas
-              size={gridSize}
-              pixels={testPixels}
-              onPixelsChange={handlePixelsChange}
-              onStrokeEnd={handleStrokeEnd}
-              canvasSize={280}
-            />
-            <div className="flex flex-col gap-2">
-              <PixelPreview pixels={testPixels} size={gridSize} previewSize={56} />
-              {/* 平行移動 (translation) コントロール */}
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-[10px] text-zinc-400">平行移動</span>
-                <button
-                  type="button"
-                  className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
-                  onClick={() => { const p = translatePixels(testPixels, gridSize, 0, -1); handlePixelsChange(p); setCommittedPixels(p); }}
-                  title="上に移動"
-                >
-                  ↑
-                </button>
-                <div className="flex gap-0.5">
-                  <button
-                    type="button"
-                    className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
-                    onClick={() => { const p = translatePixels(testPixels, gridSize, -1, 0); handlePixelsChange(p); setCommittedPixels(p); }}
-                    title="左に移動"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
-                    onClick={() => { const p = translatePixels(testPixels, gridSize, 1, 0); handlePixelsChange(p); setCommittedPixels(p); }}
-                    title="右に移動"
-                  >
-                    →
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
-                  onClick={() => { const p = translatePixels(testPixels, gridSize, 0, 1); handlePixelsChange(p); setCommittedPixels(p); }}
-                  title="下に移動"
-                >
-                  ↓
-                </button>
-              </div>
-            </div>
-          </div>
-          {/* 推論結果 (prediction result) */}
-          {predictionResult.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-zinc-500">推論結果 (prediction)</span>
-              {topPrediction && (
-                <span className="text-2xl font-bold">
-                  {String(topPrediction.idx)} ({(topPrediction.val * 100).toFixed(1) satisfies string}%)
-                </span>
-              )}
-              <div className="flex gap-0.5">
-                {predictionResult.map((val, idx) => (
-                  <div key={idx} className="flex flex-col items-center text-[10px]">
-                    <div
-                      className="w-5 bg-blue-500 rounded-t"
-                      style={{ height: `${String(Math.max(1, val * 60)) satisfies string}px` }}
-                    />
-                    <span>{String(idx)}</span>
-                    <span className="text-zinc-400">{(val * 100).toFixed(0) satisfies string}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* レイヤー可視化 (layer visualization) */}
-        <div className="flex-1 min-w-[300px]">
-          <LayerVisualizer
-            layers={entry.layers}
-            params={networkState.params}
-            layerOutputs={layerOutputs}
-            inputPixels={committedPixels}
+      {isBuiltinTask ? (
+        /* 論理ゲート等の組み込みタスク用UI */
+        <div className="flex flex-col gap-6">
+          {/* 決定境界可視化 (decision boundary visualization) */}
+          <DecisionBoundaryVisualizer
+            networkState={networkState}
+            dataset={currentBuiltinDataset}
+            trainingStep={trainingStep}
           />
         </div>
-      </div>
+      ) : (
+        <div className="flex gap-6 flex-wrap">
+          {/* テスト入力 (test input) */}
+          <div className="flex flex-col gap-3">
+            <h3 className="font-medium text-sm text-zinc-600 dark:text-zinc-400">
+              テスト入力 (test input)
+            </h3>
+            <div className="flex items-start gap-3">
+              {gridSize !== null && (
+                <>
+                  <PixelCanvas
+                    size={gridSize}
+                    pixels={testPixels}
+                    onPixelsChange={handlePixelsChange}
+                    onStrokeEnd={handleStrokeEnd}
+                    canvasSize={280}
+                  />
+                  <div className="flex flex-col gap-2">
+                    <PixelPreview pixels={testPixels} size={gridSize} previewSize={56} />
+                    {/* 平行移動 (translation) コントロール */}
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[10px] text-zinc-400">平行移動</span>
+                      <button
+                        type="button"
+                        className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                        onClick={() => { const p = translatePixels(testPixels, gridSize, 0, -1); handlePixelsChange(p); setCommittedPixels(p); }}
+                        title="上に移動"
+                      >
+                        ↑
+                      </button>
+                      <div className="flex gap-0.5">
+                        <button
+                          type="button"
+                          className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                          onClick={() => { const p = translatePixels(testPixels, gridSize, -1, 0); handlePixelsChange(p); setCommittedPixels(p); }}
+                          title="左に移動"
+                        >
+                          ←
+                        </button>
+                        <button
+                          type="button"
+                          className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                          onClick={() => { const p = translatePixels(testPixels, gridSize, 1, 0); handlePixelsChange(p); setCommittedPixels(p); }}
+                          title="右に移動"
+                        >
+                          →
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="w-6 h-6 text-xs bg-zinc-200 dark:bg-zinc-700 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                        onClick={() => { const p = translatePixels(testPixels, gridSize, 0, 1); handlePixelsChange(p); setCommittedPixels(p); }}
+                        title="下に移動"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            {/* 推論結果 (prediction result) */}
+            {predictionResult.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-zinc-500">推論結果 (prediction)</span>
+                {topPrediction && (
+                  <span className="text-2xl font-bold">
+                    {String(topPrediction.idx)} ({(topPrediction.val * 100).toFixed(1) satisfies string}%)
+                  </span>
+                )}
+                <div className="flex gap-0.5">
+                  {predictionResult.map((val, idx) => (
+                    <div key={idx} className="flex flex-col items-center text-[10px]">
+                      <div
+                        className="w-5 bg-blue-500 rounded-t"
+                        style={{ height: `${String(Math.max(1, val * 60)) satisfies string}px` }}
+                      />
+                      <span>{String(idx)}</span>
+                      <span className="text-zinc-400">{(val * 100).toFixed(0) satisfies string}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* レイヤー可視化 (layer visualization) */}
+          <div className="flex-1 min-w-[300px]">
+            <LayerVisualizer
+              layers={entry.layers}
+              params={networkState.params}
+              layerOutputs={layerOutputs}
+              inputPixels={committedPixels}
+            />
+          </div>
+        </div>
+      )}
 
       {/* 学習パネル (training panel) */}
       <TrainingPanel
-        sampleCount={samples.length}
+        sampleCount={isBuiltinTask ? builtinSampleCount : samples.length}
         trainingStep={trainingStep}
         lastLoss={lastLoss}
         lossHistory={lossHistory}
@@ -453,6 +508,9 @@ export function ModelWorkspace({ modelId }: Props) {
         gridSize={gridSize}
         selectedFolder={selectedFolder}
         onSelectFolder={setSelectedFolder}
+        builtinDatasets={task?.builtinDatasets ?? null}
+        builtinDatasetName={builtinDatasetName ?? task?.builtinDatasets?.[0]?.name ?? null}
+        onSelectBuiltinDataset={setBuiltinDatasetName}
       />
     </div>
   );

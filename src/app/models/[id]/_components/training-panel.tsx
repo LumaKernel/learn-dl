@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { TrainingConfig } from "@/domain/nn/network";
 import type { FolderSummary } from "@/app/datasets/handwriting/actions";
 import type { GridSize } from "@/domain/pixel-grid";
+import type { BuiltinDataset } from "@/domain/nn/task";
 
 type TrainingProgress = {
   readonly current: number;
@@ -21,9 +22,12 @@ type Props = {
   readonly onTrainStep: (config: TrainingConfig, steps: number) => void;
   readonly onSave: () => void;
   readonly folders: ReadonlyArray<FolderSummary>;
-  readonly gridSize: GridSize;
+  readonly gridSize: GridSize | null;
   readonly selectedFolder: string;
   readonly onSelectFolder: (folder: string) => void;
+  readonly builtinDatasets: ReadonlyArray<BuiltinDataset> | null;
+  readonly builtinDatasetName: string | null;
+  readonly onSelectBuiltinDataset: (name: string) => void;
 };
 
 function LossGraph({ history }: { readonly history: ReadonlyArray<number> }) {
@@ -89,6 +93,9 @@ export function TrainingPanel({
   gridSize,
   selectedFolder,
   onSelectFolder,
+  builtinDatasets,
+  builtinDatasetName,
+  onSelectBuiltinDataset,
 }: Props) {
   const [learningRate, setLearningRate] = useState("0.01");
   const [batchSize, setBatchSize] = useState("32");
@@ -132,35 +139,57 @@ export function TrainingPanel({
       </div>
 
       {/* データセット選択 (dataset selection) */}
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-zinc-500">データセットフォルダ</span>
-          <select
-            className="border border-zinc-300 dark:border-zinc-600 rounded px-2 py-1 text-sm bg-transparent"
-            value={selectedFolder}
-            onChange={(e) => onSelectFolder(e.target.value)}
-          >
-            {folders
-              .filter((f) => f.size === gridSize)
-              .map((f) => {
-                const total = Object.values(f.counts).reduce((a, b) => a + b, 0);
-                return (
-                  <option key={f.folder} value={f.folder}>
-                    {`${f.folder satisfies string} (${String(total) satisfies string} サンプル)`}
-                  </option>
-                );
-              })}
-            {folders.filter((f) => f.size === gridSize).length === 0 && (
-              <option value="default">default (0 サンプル)</option>
-            )}
-          </select>
-        </label>
-        <span className="text-xs text-zinc-500 pb-1">
-          {`読み込み済み: ${String(sampleCount) satisfies string} サンプル (${String(gridSize) satisfies string}x${String(gridSize) satisfies string})`}
-        </span>
-      </div>
+      {builtinDatasets ? (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-zinc-500">データセット (論理ゲート)</span>
+            <select
+              className="border border-zinc-300 dark:border-zinc-600 rounded px-2 py-1 text-sm bg-transparent"
+              value={builtinDatasetName ?? builtinDatasets[0]?.name ?? ""}
+              onChange={(e) => onSelectBuiltinDataset(e.target.value)}
+            >
+              {builtinDatasets.map((d) => (
+                <option key={d.name} value={d.name}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-xs text-zinc-500 pb-1">
+            {`${String(sampleCount) satisfies string} サンプル (全パターン網羅)`}
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-zinc-500">データセットフォルダ</span>
+            <select
+              className="border border-zinc-300 dark:border-zinc-600 rounded px-2 py-1 text-sm bg-transparent"
+              value={selectedFolder}
+              onChange={(e) => onSelectFolder(e.target.value)}
+            >
+              {folders
+                .filter((f) => gridSize !== null && f.size === gridSize)
+                .map((f) => {
+                  const total = Object.values(f.counts).reduce((a, b) => a + b, 0);
+                  return (
+                    <option key={f.folder} value={f.folder}>
+                      {`${f.folder satisfies string} (${String(total) satisfies string} サンプル)`}
+                    </option>
+                  );
+                })}
+              {gridSize !== null && folders.filter((f) => f.size === gridSize).length === 0 && (
+                <option value="default">default (0 サンプル)</option>
+              )}
+            </select>
+          </label>
+          <span className="text-xs text-zinc-500 pb-1">
+            {`読み込み済み: ${String(sampleCount) satisfies string} サンプル${(gridSize !== null ? ` (${String(gridSize) satisfies string}x${String(gridSize) satisfies string})` : "") satisfies string}`}
+          </span>
+        </div>
+      )}
 
-      {sampleCount === 0 && (
+      {!builtinDatasets && sampleCount === 0 && (
         <p className="text-sm text-amber-500">
           データセットがありません。先に手書きデータを作成してください。
         </p>
@@ -222,7 +251,7 @@ export function TrainingPanel({
         <button
           type="button"
           className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-          disabled={isPending || isTraining || sampleCount === 0}
+          disabled={isPending || isTraining || (!builtinDatasets && sampleCount === 0)}
           onClick={() => handleTrain(1)}
         >
           1ステップ実行
@@ -230,7 +259,7 @@ export function TrainingPanel({
         <button
           type="button"
           className="px-3 py-1.5 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50"
-          disabled={isPending || isTraining || sampleCount === 0}
+          disabled={isPending || isTraining || (!builtinDatasets && sampleCount === 0)}
           onClick={() => handleTrain(parseInt(stepCount, 10) || 10)}
         >
           {`${String(parseInt(stepCount, 10) || 10) satisfies string}ステップ実行 (カスタム)`}
@@ -238,7 +267,7 @@ export function TrainingPanel({
         <button
           type="button"
           className="px-3 py-1.5 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-          disabled={isPending || isTraining || sampleCount === 0}
+          disabled={isPending || isTraining || (!builtinDatasets && sampleCount === 0)}
           onClick={() => handleTrain(100)}
         >
           100ステップ実行

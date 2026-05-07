@@ -27,9 +27,11 @@ export function CreateModelForm() {
   const [lossName, setLossName] = useState(task.defaultLossName);
   const [initStrategyName, setInitStrategyName] = useState("he");
   const [seed, setSeed] = useState("42");
-  const [hiddenLayers, setHiddenLayers] = useState<ReadonlyArray<HiddenLayerConfig>>([
-    { outputSize: "32", activationName: "relu" },
-  ]);
+  // タスクに応じたデフォルト隠れ層
+  const defaultHiddenLayers = task.datasetType === "builtin"
+    ? [] as ReadonlyArray<HiddenLayerConfig>
+    : [{ outputSize: "32", activationName: "relu" }] as ReadonlyArray<HiddenLayerConfig>;
+  const [hiddenLayers, setHiddenLayers] = useState<ReadonlyArray<HiddenLayerConfig>>(defaultHiddenLayers);
 
   const handleTaskChange = useCallback((newTaskName: string) => {
     const newTask = findTask(newTaskName);
@@ -37,6 +39,12 @@ export function CreateModelForm() {
     setLossName(newTask.defaultLossName);
     const firstInput = newTask.inputOptions[0] ?? (() => { throw new Error("入力オプションが定義されていません"); })();
     setInputSizeStr(String(firstInput.size));
+    // タスクに応じた隠れ層デフォルト
+    if (newTask.datasetType === "builtin") {
+      setHiddenLayers([]);
+    } else {
+      setHiddenLayers([{ outputSize: "32", activationName: "relu" }]);
+    }
   }, []);
 
   const addHiddenLayer = useCallback(() => {
