@@ -17,13 +17,22 @@ type Props = {
 
 /**
  * 決定境界 (decision boundary) の直線パラメータ。
- * 1層ネットワークの場合: w1*x1 + w2*x2 + b = 0
+ * w1*x1 + w2*x2 + b = 0
  */
 type BoundaryLine = {
   readonly w1: number;
   readonly w2: number;
   readonly b: number;
   readonly step: number;
+};
+
+/**
+ * 1層目の各ニューロンの境界線情報。
+ */
+type NeuronBoundary = {
+  readonly line: BoundaryLine;
+  readonly neuronIdx: number;
+  readonly activationName: string;
 };
 
 /**
@@ -49,6 +58,32 @@ const getSingleLayerWeights = (networkState: NetworkState): BoundaryLine | null 
   const w2 = params.weights.at(0, 1);
   const b = params.bias.at(0);
   return { w1, w2, b, step: 0 };
+};
+
+/** ニューロン別の色パレット */
+const NEURON_COLORS = [
+  "#e11d48", "#7c3aed", "#0891b2", "#059669", "#ca8a04",
+  "#dc2626", "#9333ea", "#0284c7", "#16a34a", "#d97706",
+  "#be123c", "#6d28d9", "#0e7490", "#15803d", "#a16207",
+  "#9f1239", "#5b21b6", "#155e75", "#166534", "#854d0e",
+] as const;
+
+const neuronColor = (idx: number): string => NEURON_COLORS[idx % NEURON_COLORS.length] ?? "#888";
+
+/**
+ * 1層目の全ニューロンの境界線を取得する (入力2次元の場合のみ)。
+ */
+const getFirstLayerNeuronBoundaries = (networkState: NetworkState): ReadonlyArray<NeuronBoundary> => {
+  const params = networkState.params[0];
+  if (!params) return [];
+  // 入力が2次元でなければ描画不可
+  if (params.weights.cols !== 2) return [];
+  const activationName = networkState.def.layers[0]?.activation.name ?? "";
+  return params.weights.data.map((row, neuronIdx) => ({
+    line: { w1: row.at(0), w2: row.at(1), b: params.bias.at(neuronIdx), step: 0 },
+    neuronIdx,
+    activationName,
+  }));
 };
 
 /**
@@ -125,6 +160,41 @@ const Heatmap = memo(function Heatmap({
   );
 });
 
+/**
+ * w1*x + w2*y + b = 0 の直線の端点(クリッピング済み)を計算する。
+ */
+const computeLineEndpoints = (
+  w1: number,
+  w2: number,
+  b: number,
+  rangeMin: number,
+  rangeMax: number,
+): readonly [{ readonly x: number; readonly y: number }, { readonly x: number; readonly y: number }] | null => {
+  const points: { x: number; y: number }[] = [];
+
+  if (Math.abs(w2) > 1e-10) {
+    const y1 = -(w1 * rangeMin + b) / w2;
+    if (y1 >= rangeMin && y1 <= rangeMax) points.push({ x: rangeMin, y: y1 });
+    const y2 = -(w1 * rangeMax + b) / w2;
+    if (y2 >= rangeMin && y2 <= rangeMax) points.push({ x: rangeMax, y: y2 });
+  }
+  if (Math.abs(w1) > 1e-10) {
+    const x1 = -(w2 * rangeMin + b) / w1;
+    if (x1 > rangeMin && x1 < rangeMax) points.push({ x: x1, y: rangeMin });
+    const x2 = -(w2 * rangeMax + b) / w1;
+    if (x2 > rangeMin && x2 < rangeMax) points.push({ x: x2, y: rangeMax });
+  }
+
+  if (points.length < 2) return null;
+
+  const uniquePoints = points.filter(
+    (p, i) => points.findIndex((q) => Math.abs(q.x - p.x) < 1e-8 && Math.abs(q.y - p.y) < 1e-8) === i,
+  );
+  if (uniquePoints.length < 2) return null;
+
+  return [uniquePoints[0]!, uniquePoints[1]!] as const;
+};
+
 /** 決定境界の直線描画 */
 const BoundaryLineComponent = memo(function BoundaryLineComponent({
   line,
@@ -134,6 +204,8 @@ const BoundaryLineComponent = memo(function BoundaryLineComponent({
   opacity,
   color,
   strokeWidth,
+  label,
+  showActiveSide,
 }: {
   readonly line: BoundaryLine;
   readonly size: number;
@@ -142,57 +214,96 @@ const BoundaryLineComponent = memo(function BoundaryLineComponent({
   readonly opacity: number;
   readonly color: string;
   readonly strokeWidth: number;
+  readonly label?: string;
+  /** ReLU の活性側 (w·x+b > 0) を矢印で示す */
+  readonly showActiveSide?: boolean;
 }): ReactNode {
   const { w1, w2, b } = line;
   const range = rangeMax - rangeMin;
 
-  // Wx+b=0 の直線を座標→ピクセルに変換
   const toPixelX = (x: number) => ((x - rangeMin) / range) * size;
-  const toPixelY = (y: number) => ((rangeMax - y) / range) * size; // Y軸反転
+  const toPixelY = (y: number) => ((rangeMax - y) / range) * size;
 
-  // 直線の2点を求める（クリッピング含む）
-  // w1*x + w2*y + b = 0 → y = -(w1*x + b) / w2 or x = -(w2*y + b) / w1
-  const points: { x: number; y: number }[] = [];
+  const endpoints = computeLineEndpoints(w1, w2, b, rangeMin, rangeMax);
+  if (!endpoints) return null;
 
-  if (Math.abs(w2) > 1e-10) {
-    // x = rangeMin での y
-    const y1 = -(w1 * rangeMin + b) / w2;
-    if (y1 >= rangeMin && y1 <= rangeMax) points.push({ x: rangeMin, y: y1 });
-    // x = rangeMax での y
-    const y2 = -(w1 * rangeMax + b) / w2;
-    if (y2 >= rangeMin && y2 <= rangeMax) points.push({ x: rangeMax, y: y2 });
-  }
-  if (Math.abs(w1) > 1e-10) {
-    // y = rangeMin での x
-    const x1 = -(w2 * rangeMin + b) / w1;
-    if (x1 > rangeMin && x1 < rangeMax) points.push({ x: x1, y: rangeMin });
-    // y = rangeMax での x
-    const x2 = -(w2 * rangeMax + b) / w1;
-    if (x2 > rangeMin && x2 < rangeMax) points.push({ x: x2, y: rangeMax });
-  }
+  const [p0, p1] = endpoints;
+  const px0 = toPixelX(p0.x);
+  const py0 = toPixelY(p0.y);
+  const px1 = toPixelX(p1.x);
+  const py1 = toPixelY(p1.y);
 
-  if (points.length < 2) return null;
+  // ReLU の活性側矢印: 直線の中点から法線方向 (w1, w2) の向きに短い矢印
+  const activeSideArrow = showActiveSide ? (() => {
+    const midX = (p0.x + p1.x) / 2;
+    const midY = (p0.y + p1.y) / 2;
+    // 法線方向 = (w1, w2) の方向が活性側 (w·x+b > 0)
+    const norm = Math.sqrt(w1 * w1 + w2 * w2);
+    if (norm < 1e-10) return null;
+    const arrowLen = range * 0.06;
+    const nx = (w1 / norm) * arrowLen;
+    const ny = (w2 / norm) * arrowLen;
+    const tipX = midX + nx;
+    const tipY = midY + ny;
+    const pxMid = toPixelX(midX);
+    const pyMid = toPixelY(midY);
+    const pxTip = toPixelX(tipX);
+    const pyTip = toPixelY(tipY);
+    // 矢印の頭 (三角形)
+    const dx = pxTip - pxMid;
+    const dy = pyTip - pyMid;
+    const headLen = 6;
+    const headAngle = 0.5;
+    const ax1 = pxTip - headLen * Math.cos(Math.atan2(dy, dx) - headAngle);
+    const ay1 = pyTip - headLen * Math.sin(Math.atan2(dy, dx) - headAngle);
+    const ax2 = pxTip - headLen * Math.cos(Math.atan2(dy, dx) + headAngle);
+    const ay2 = pyTip - headLen * Math.sin(Math.atan2(dy, dx) + headAngle);
+    return (
+      <g opacity={opacity}>
+        <line x1={pxMid} y1={pyMid} x2={pxTip} y2={pyTip} stroke={color} strokeWidth={1.5} />
+        <polygon
+          points={`${pxTip.toFixed(1) satisfies string},${pyTip.toFixed(1) satisfies string} ${ax1.toFixed(1) satisfies string},${ay1.toFixed(1) satisfies string} ${ax2.toFixed(1) satisfies string},${ay2.toFixed(1) satisfies string}`}
+          fill={color}
+        />
+      </g>
+    );
+  })() : null;
 
-  // 重複除去
-  const uniquePoints = points.filter(
-    (p, i) => points.findIndex((q) => Math.abs(q.x - p.x) < 1e-8 && Math.abs(q.y - p.y) < 1e-8) === i,
-  );
-  if (uniquePoints.length < 2) return null;
-
-  const p0 = uniquePoints[0]!;
-  const p1 = uniquePoints[1]!;
+  // ラベル表示位置: 直線の端点付近
+  const labelElement = label ? (() => {
+    // p1 側にラベルを表示
+    const lx = px1 + (px1 > size / 2 ? -4 : 4);
+    const ly = py1 + (py1 > size / 2 ? -4 : 12);
+    return (
+      <text
+        x={lx}
+        y={ly}
+        fontSize="9"
+        fill={color}
+        fontWeight="bold"
+        opacity={opacity}
+        textAnchor={px1 > size / 2 ? "end" : "start"}
+      >
+        {label}
+      </text>
+    );
+  })() : null;
 
   return (
-    <line
-      x1={toPixelX(p0.x)}
-      y1={toPixelY(p0.y)}
-      x2={toPixelX(p1.x)}
-      y2={toPixelY(p1.y)}
-      stroke={color}
-      strokeWidth={strokeWidth}
-      opacity={opacity}
-      strokeDasharray={opacity < 1 ? "4 2" : "none"}
-    />
+    <g>
+      <line
+        x1={px0}
+        y1={py0}
+        x2={px1}
+        y2={py1}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        opacity={opacity}
+        strokeDasharray={opacity < 1 ? "4 2" : "none"}
+      />
+      {activeSideArrow}
+      {labelElement}
+    </g>
   );
 });
 
@@ -246,12 +357,20 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
 
   const [showGhosts, setShowGhosts] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showNeuronLines, setShowNeuronLines] = useState(true);
 
   // 過去の決定境界の履歴 (残像用)
   const [boundaryHistory, setBoundaryHistory] = useState<ReadonlyArray<BoundaryLine>>([]);
 
-  // 現在の決定境界
+  // 現在の決定境界 (1層ネットワークの最終出力用)
   const currentBoundary = useMemo(() => getSingleLayerWeights(networkState), [networkState]);
+
+  // 1層目の各ニューロンの境界線 (多層ネットワーク用)
+  const isMultiLayer = networkState.def.layers.length > 1;
+  const neuronBoundaries = useMemo(
+    () => isMultiLayer ? getFirstLayerNeuronBoundaries(networkState) : [],
+    [networkState, isMultiLayer],
+  );
 
   // 履歴に追加 (ステップが進んだ場合のみ)
   const lastRecordedStepRef = useRef(-1);
@@ -318,6 +437,17 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
               残像表示
             </label>
           )}
+          {neuronBoundaries.length > 0 && (
+            <label className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showNeuronLines}
+                onChange={(e) => setShowNeuronLines(e.target.checked)}
+                className="rounded"
+              />
+              ニューロン境界
+            </label>
+          )}
         </div>
       </div>
 
@@ -359,7 +489,7 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
             />
           ))}
 
-          {/* 現在の決定境界 */}
+          {/* 現在の決定境界 (1層ネットワーク) */}
           {currentBoundary && (
             <BoundaryLineComponent
               line={currentBoundary}
@@ -371,6 +501,22 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
               strokeWidth={2.5}
             />
           )}
+
+          {/* 1層目の各ニューロンの境界線 (多層ネットワーク) */}
+          {showNeuronLines && neuronBoundaries.map((nb) => (
+            <BoundaryLineComponent
+              key={nb.neuronIdx}
+              line={nb.line}
+              size={SIZE}
+              rangeMin={RANGE_MIN}
+              rangeMax={RANGE_MAX}
+              opacity={0.8}
+              color={neuronColor(nb.neuronIdx)}
+              strokeWidth={2}
+              label={`n${String(nb.neuronIdx) satisfies string}`}
+              showActiveSide={nb.activationName === "relu"}
+            />
+          ))}
 
           {/* データ点 */}
           {dataset?.samples.map((sample, i) => {
@@ -520,6 +666,22 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
                   <span>決定境界 (Wx+b=0)</span>
                 </div>
               )}
+              {neuronBoundaries.length > 0 && showNeuronLines && (
+                <>
+                  {neuronBoundaries.map((nb) => (
+                    <div key={nb.neuronIdx} className="flex items-center gap-2">
+                      <div className="w-4 h-0.5" style={{ backgroundColor: neuronColor(nb.neuronIdx) }} />
+                      <span>{`n${String(nb.neuronIdx) satisfies string} の境界`}</span>
+                    </div>
+                  ))}
+                  {neuronBoundaries[0]?.activationName === "relu" && (
+                    <div className="flex items-center gap-2 text-zinc-400">
+                      <span className="text-[10px]">▶</span>
+                      <span>矢印 = ReLU 活性側 (出力 &gt; 0)</span>
+                    </div>
+                  )}
+                </>
+              )}
               {showHeatmap && (
                 <div className="flex items-center gap-1 mt-1">
                   <div className="flex h-3">
@@ -532,14 +694,6 @@ export function DecisionBoundaryVisualizer({ networkState, dataset, trainingStep
               )}
             </div>
           </div>
-
-          {/* 多層ネットワークの注意書き */}
-          {!currentBoundary && networkState.def.layers.length > 1 && (
-            <div className="text-xs text-zinc-500 italic">
-              多層ネットワークのため直線の決定境界は表示されません。
-              ヒートマップで出力分布を確認してください。
-            </div>
-          )}
         </div>
       </div>
     </div>
